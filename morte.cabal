@@ -1,0 +1,26 @@
+Name: morte
+Version: 1.0.0
+Cabal-Version: >=1.8.0.2
+Build-Type: Simple
+License: BSD3
+License-File: LICENSE
+Copyright: 2014 Gabriel Gonzalez
+Author: Gabriel Gonzalez
+Maintainer: Gabriel439@gmail.com
+Bug-Reports: https://github.com/Gabriel439/Haskell-Morte-Library/issues
+Synopsis: Bare-bones calculus-of-constructions
+Description: Bare-bones calculus-of-constructions
+Category: Compiler
+Source-Repository head
+    Type: git
+    Location: https://github.com/Gabriel439/Haskell-Morte-Library
+
+Library
+    Hs-Source-Dirs: src
+    Build-Depends:
+        base             >= 4        && < 5  ,
+        containers       >= 0.5      && < 0.6,
+        text             >= 0.11.1.0 && < 1.2,
+        transformers     >= 0.2.0.0  && < 0.5
+    Exposed-Modules: Morte
+    GHC-Options: -O2 -Wall
