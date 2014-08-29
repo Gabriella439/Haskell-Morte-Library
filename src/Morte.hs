@@ -28,9 +28,7 @@ import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 
 -- TODO: Add a parser
--- TODO: Decide on lazy versus strict Text
--- TODO: Add support for '_' (unused variables)
--- TODO: Implement `quote` more elegantly
+-- TODO: Add support for '_' (unused variables)?
 
 -- | Label for a bound variable
 type Var = Text
@@ -228,7 +226,12 @@ whnf e = case e of
 -- | Reduce an expression to normal form
 normalize :: Expr -> Expr
 normalize e = case e of
-    Lam x t e' -> Lam x (normalize t) (normalize e')
+    Lam x t e' -> case e' of
+        App f (Var x') | x == x'   -> normalize f
+                       | otherwise -> e''
+        _                          -> e''
+      where
+        e'' = Lam x (normalize t) (normalize e')
     Pi  x t e' -> Pi  x (normalize t) (normalize e')
     App f _C   -> case normalize f of
         Lam x _A _B -> normalize (subst x _C _B)
