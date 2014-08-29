@@ -5,13 +5,18 @@
 
 module Morte (
     -- * Types
+    Var,
     Const(..),
     Expr(..),
 
     -- * Functions
     typeOf,
     normalize,
-    pretty
+    pretty,
+
+    -- * Utilities
+    printValue,
+    printType
     ) where
 
 import Control.Monad.Trans.Class (lift)
@@ -19,22 +24,22 @@ import Control.Monad.Trans.State (evalStateT, get, put)
 import Data.Monoid (mempty, (<>))
 import Data.Text.Lazy (Text, intercalate, unpack)
 import qualified Data.Text.Lazy as Text
+import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
-import Data.Text.Lazy.Builder.Int (decimal)
-import Prelude hiding (const, succ, id)
 
 -- TODO: Add a parser
 -- TODO: Decide on lazy versus strict Text
 -- TODO: Add support for '_' (unused variables)
 -- TODO: Implement `quote` more elegantly
 
+-- | Label for a bound variable
 type Var = Text
 
 type Context = [(Var, Expr)]
 
 ppContext :: Context -> Builder
 ppContext =
-    fromLazyText . Text.unlines . map (toLazyText . ppKeyVal)
+    fromLazyText . Text.unlines . map (toLazyText . ppKeyVal) . reverse
   where
     ppKeyVal (key, val) = fromLazyText key <> " : " <> buildExpr val
 
@@ -61,13 +66,14 @@ rule Star Star = return Star
 rule Box  Box  = return Box
 rule Box  Star = return Star
 
--- | Higher-order abstract syntax tree for expressions
+-- | Syntax tree for expressions
 data Expr
     = Const Const
     | Var Var
     | Lam Var Expr Expr
     | Pi  Var Expr Expr
     | App Expr Expr
+    deriving (Show)
 
 instance Eq Expr where
     e1 == e2 = case cmp of
@@ -78,9 +84,6 @@ instance Eq Expr where
             q1 <- quote (normalize e1)
             q2 <- quote (normalize e2)
             return (q1 == q2)
-
-instance Show Expr where
-    show = unpack . pretty
 
 data Quoted
     = Const' Const
@@ -154,7 +157,7 @@ quote e0 = evalStateT (go e0) (0, [])
             a' <- go a
             return (App' f' a')
 
--- | Pretty-print an expression as lazy `Text`
+-- | Render an expression as pretty-printed `Text`
 pretty :: Expr -> Text
 pretty = toLazyText . buildExpr
 
@@ -203,8 +206,8 @@ typeOf_ ctx e = case e of
                 <>  "Valid types: " <> buildConsts  <> "\n" ) )
         fmap Const (rule s t)
     App f a  -> do
-        e       <- fmap whnf (typeOf_ ctx f)
-        (x, _A, _B) <- case e of
+        e' <- fmap whnf (typeOf_ ctx f)
+        (x, _A, _B) <- case e' of
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (toLazyText (
                     header
@@ -249,3 +252,15 @@ normalize e = case e of
         Lam x _A _B -> normalize (subst x _C _B)
         _           -> e
     _       -> e
+
+-- | Pretty-print an expression
+printValue :: Expr -> IO ()
+printValue = Text.putStrLn . pretty
+
+{-| Pretty print an expression's type, or output an error message if type
+    checking fails
+-}
+printType :: Expr -> IO ()
+printType expr = case typeOf expr of
+    Left err -> Text.putStr err
+    Right t  -> Text.putStrLn (pretty t)
