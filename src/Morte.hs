@@ -21,7 +21,7 @@ module Morte (
 
 import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Monoid (mempty, (<>))
-import Data.Text.Lazy (Text)
+import Data.Text.Lazy (Text, snoc)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
