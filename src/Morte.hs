@@ -21,16 +21,25 @@ module Morte (
 
 import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Monoid (mempty, (<>))
-import Data.Text.Lazy (Text, snoc)
+import Data.String (IsString(fromString))
+import Data.Text.Lazy (Text, cons)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
+import Data.Text.Lazy.Builder.Int (decimal)
 
 -- TODO: Add a parser
 -- TODO: Add support for '_' (unused variables)?
 
 -- | Label for a bound variable
-type Var = Text
+data Var = V Integer Text deriving (Eq, Show)
+
+instance IsString Var
+  where
+    fromString str = V 0 (Text.pack str)
+
+buildVar :: Var -> Builder
+buildVar (V n txt) = fromLazyText txt <> if n == 0 then mempty else decimal n
 
 type Context = [(Var, Expr)]
 
@@ -38,7 +47,7 @@ ppContext :: Context -> Builder
 ppContext =
     fromLazyText . Text.unlines . map (toLazyText . ppKeyVal) . reverse
   where
-    ppKeyVal (key, val) = fromLazyText key <> " : " <> buildExpr val
+    ppKeyVal (key, val) = buildVar key <> " : " <> buildExpr val
 
 -- | Constants
 data Const = Star | Box deriving (Eq, Show, Bounded, Enum)
@@ -74,7 +83,7 @@ data Expr
     deriving (Show)
 
 instance Eq Expr where
-    eL0 == eR0 = evalState (go eL0 eR0) []
+    eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
       where
         go :: Expr -> Expr -> State [(Var, Var)] Bool
         go (Const cL) (Const cR) = return (cL == cR)
@@ -100,26 +109,30 @@ instance Eq Expr where
             return (b1 && b2)
         go _ _ = return False
 
+instance IsString Expr
+  where
+    fromString str = Var (fromString str)
+
 buildExpr :: Expr -> Builder
 buildExpr = go False False
   where
     go :: Bool -> Bool -> Expr -> Builder
     go parenBind parenApp e = case e of
         Const c    -> buildConst c
-        Var n      -> fromLazyText n
-        Lam n t e' ->
+        Var v      -> buildVar v
+        Lam v t e' ->
                 (if parenBind then "(" else "")
             <>  "λ("
-            <>  fromLazyText n
+            <>  buildVar v
             <>  " : "
             <>  go False False t
             <>  ") → "
             <>  go False False e'
             <>  (if parenBind then ")" else "")
-        Pi n t e'  ->
+        Pi  v t e' ->
                 (if parenBind then "(" else "")
-            <>  (if used n e
-                 then "∀(" <> fromLazyText n <> " : " <> go False False t <> ")"
+            <>  (if used v e
+                 then "∀(" <> buildVar v <> " : " <> go False False t <> ")"
                  else go True False t )
             <>  " → "
             <>  go False False e'
@@ -129,29 +142,37 @@ buildExpr = go False False
             <>  go True False f <> " " <> go True True x
             <>  (if parenApp then ")" else "")
 
-used :: Text -> Expr -> Bool
-used n e = case e of
+used :: Var -> Expr -> Bool
+used v e = case e of
     Const _            -> False
-    Var n' | n == n'   -> True
+    Var v' | v == v'   -> True
            | otherwise -> False
-    Lam _ t e'         -> used n t || used n e'
-    Pi  _ t e'         -> used n t || used n e'
-    App f a            -> used n f || used n a
+    Lam _ t e'         -> used v t || used v e'
+    Pi  _ t e'         -> used v t || used v e'
+    App f a            -> used v f || used v a
 
 -- | Render an expression as pretty-printed `Text`
 pretty :: Expr -> Text
 pretty = toLazyText . buildExpr
 
-tag :: Char -> Expr -> Expr
-tag c = go 
+toOdd :: Integer -> Integer
+toOdd n = 2 * n + 1
+
+toEven :: Integer -> Integer
+toEven n = 2 * n
+
+renumber :: (Integer -> Integer) -> Expr -> Expr
+renumber k = go 
   where
     go e = case e of
-        Lam n t e' -> let n' = n `snoc` c in Lam n' t (subst n (Var n') e')
-        Pi  n t e' -> let n' = n `snoc` c in Pi  n' t (subst n (Var n') e')
-        App f a    -> App (go f) (go a)
-        _          -> e
+        Lam v@(V n l) t e' ->
+            let v' = V (k n) l in Lam v' t (subst v (Var v') e')
+        Pi  v@(V n l) t e' ->
+            let v' = V (k n) l in Pi  v' t (subst v (Var v') e')
+        App f a            -> App (go f) (go a)
+        _                  -> e
 
-subst :: Text -> Expr -> Expr -> Expr
+subst :: Var -> Expr -> Expr -> Expr
 subst n0 eL eR = go eR'
   where
     go e = case e of
@@ -161,8 +182,8 @@ subst n0 eL eR = go eR'
         Var n      -> if (n == n0) then eL' else e
         _          -> e
 
-    eL' = tag '_' eL
-    eR' = tag '\'' eR
+    eL' = renumber toOdd  eL
+    eR' = renumber toEven eR
 
 typeOf_ :: Context -> Expr -> Either Text Expr
 typeOf_ ctx e = case e of
