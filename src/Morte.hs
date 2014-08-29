@@ -14,7 +14,6 @@ module Morte (
     pretty
     ) where
 
-import Control.Applicative (pure, (*>), (<|>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (evalStateT, get, put)
 import Data.Monoid (mempty, (<>))
