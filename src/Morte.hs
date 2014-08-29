@@ -20,7 +20,7 @@ module Morte (
     ) where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State (evalStateT, get, put)
+import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Monoid (mempty, (<>))
 import Data.Text.Lazy (Text, intercalate, unpack)
 import qualified Data.Text.Lazy as Text
@@ -76,22 +76,30 @@ data Expr
     deriving (Show)
 
 instance Eq Expr where
-    e1 == e2 = case cmp of
-        Nothing -> False
-        Just b  -> b
+    eL0 == eR0 = evalState (go eL0 eR0) []
       where
-        cmp = do
-            q1 <- quote (normalize e1)
-            q2 <- quote (normalize e2)
-            return (q1 == q2)
-
-data Quoted
-    = Const' Const
-    | Var' Int
-    | Lam' Int Quoted Quoted
-    | Pi'  Int Quoted Quoted
-    | App' Quoted Quoted
-    deriving (Eq, Show)
+        go :: Expr -> Expr -> State [(Var, Var)] Bool
+        go (Const cL) (Const cR) = return (cL == cR)
+        go (Var nL) (Var nR) = do
+            ctx <- get
+            let n = case lookup nL ctx of
+                    Nothing -> nL
+                    Just nR -> nR
+            return (n == nR)
+        go (Lam nL tL eL) (Lam nR tR eR) = do
+            modify ((nL, nR):)
+            b1 <- go tL tR
+            b2 <- go eL eR
+            return (b1 && b2)
+        go (Pi nL tL eL) (Pi nR tR eR) = do
+            modify ((nL, nR):)
+            b1 <- go tL tR
+            b2 <- go eL eR
+            return (b1 && b2)
+        go (App fL aL) (App fR aR) = do
+            b1 <- go fL fR
+            b2 <- go aL aR
+            return (b1 && b2)
 
 buildExpr :: Expr -> Builder
 buildExpr = go False False
@@ -130,32 +138,6 @@ used n e = case e of
     Lam _ t e'         -> used n t || used n e'
     Pi  _ t e'         -> used n t || used n e'
     App f a            -> used n f || used n a
-
-quote :: Expr -> Maybe Quoted
-quote e0 = evalStateT (go e0) (0, [])
-  where
-    go e = case e of
-        Const c    -> return (Const' c)
-        Var n      -> do
-            (_, ps) <- get
-            k       <- lift (lookup n ps)
-            return (Var' k)
-        Lam n t e' -> do
-            (i, ps) <- get
-            put (i + 1, (n, i):ps)
-            t'  <- go t
-            e'' <- go e'
-            return (Lam' i t' e'')
-        Pi  n t e' -> do
-            (i, ps) <- get
-            put (i + 1, (n, i):ps)
-            t'  <- go t
-            e'' <- go e'
-            return (Pi' i t' e'')
-        App f a    -> do
-            f' <- go f
-            a' <- go a
-            return (App' f' a')
 
 -- | Render an expression as pretty-printed `Text`
 pretty :: Expr -> Text
