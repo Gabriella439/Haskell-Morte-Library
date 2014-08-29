@@ -19,10 +19,9 @@ module Morte (
     printType
     ) where
 
-import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Monoid (mempty, (<>))
-import Data.Text.Lazy (Text, intercalate, unpack)
+import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
@@ -52,7 +51,8 @@ buildConst c = case c of
 buildConsts :: Builder
 buildConsts =
     fromLazyText (
-        intercalate ", " (map (toLazyText . buildConst) [minBound..maxBound]) )
+        Text.intercalate ", " (
+            map (toLazyText . buildConst) [minBound..maxBound] ) )
 
 axiom :: Const -> Either Text Const
 axiom Star = return Box
@@ -81,8 +81,8 @@ instance Eq Expr where
         go (Var nL) (Var nR) = do
             ctx <- get
             let n = case lookup nL ctx of
-                    Nothing -> nL
-                    Just nR -> nR
+                    Nothing  -> nL
+                    Just nR' -> nR'
             return (n == nR)
         go (Lam nL tL eL) (Lam nR tR eR) = do
             modify ((nL, nR):)
@@ -98,6 +98,7 @@ instance Eq Expr where
             b1 <- go fL fR
             b2 <- go aL aR
             return (b1 && b2)
+        go _ _ = return False
 
 buildExpr :: Expr -> Builder
 buildExpr = go False False
@@ -141,15 +142,27 @@ used n e = case e of
 pretty :: Expr -> Text
 pretty = toLazyText . buildExpr
 
+tag :: Char -> Expr -> Expr
+tag c = go 
+  where
+    go e = case e of
+        Lam n t e' -> let n' = n `snoc` c in Lam n' t (subst n (Var n') e')
+        Pi  n t e' -> let n' = n `snoc` c in Pi  n' t (subst n (Var n') e')
+        App f a    -> App (go f) (go a)
+        _          -> e
+
 subst :: Text -> Expr -> Expr -> Expr
-subst n0 e0 = go
+subst n0 eL eR = go eR'
   where
     go e = case e of
         Lam n t e' -> if n == n0 then e else Lam n (go t) (go e')
         Pi  n t e' -> if n == n0 then e else Pi  n (go t) (go e')
         App f a    -> App (go f) (go a)
-        Var n      -> if (n == n0) then e0 else e
+        Var n      -> if (n == n0) then eL' else e
         _          -> e
+
+    eL' = tag '_' eL
+    eR' = tag '\'' eR
 
 typeOf_ :: Context -> Expr -> Either Text Expr
 typeOf_ ctx e = case e of
@@ -226,16 +239,19 @@ whnf e = case e of
 -- | Reduce an expression to normal form
 normalize :: Expr -> Expr
 normalize e = case e of
-    Lam x t e' -> case e' of
-        App f (Var x') | x == x'   -> normalize f
-                       | otherwise -> e''
-        _                          -> e''
+    Lam x t e' -> case normalize e' of
+        App f a -> case normalize a of
+            Var x' | x == x'   -> normalize f
+                   | otherwise -> l
+            _                  -> l
+        _                      -> l
       where
-        e'' = Lam x (normalize t) (normalize e')
+        e'' = normalize e'
+        l   = Lam x (normalize t) e''
     Pi  x t e' -> Pi  x (normalize t) (normalize e')
     App f _C   -> case normalize f of
         Lam x _A _B -> normalize (subst x _C _B)
-        _           -> e
+        f'          -> App f' (normalize _C)
     _       -> e
 
 -- | Pretty-print an expression
