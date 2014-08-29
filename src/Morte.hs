@@ -15,8 +15,8 @@ module Morte (
     ) where
 
 import Control.Applicative (pure, (*>), (<|>))
-import Control.Monad.Trans.State (evalState, get, put)
-import qualified Data.IntMap.Strict as IntMap
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State (evalStateT, get, put)
 import Data.Monoid (mempty, (<>))
 import Data.Text.Lazy (Text, intercalate, unpack)
 import qualified Data.Text.Lazy as Text
@@ -24,17 +24,20 @@ import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Prelude hiding (const, succ, id)
 
--- TODO: Allow type-checking with a context
--- TODO: Add free variables
 -- TODO: Add a parser
+-- TODO: Decide on lazy versus strict Text
+-- TODO: Add support for '_' (unused variables)
+-- TODO: Implement `quote` more elegantly
 
-type Context = IntMap.IntMap Expr
+type Var = Text
+
+type Context = [(Var, Expr)]
 
 ppContext :: Context -> Builder
 ppContext =
-    fromLazyText . Text.unlines . map (toLazyText . ppKeyVal) . IntMap.assocs
+    fromLazyText . Text.unlines . map (toLazyText . ppKeyVal)
   where
-    ppKeyVal (key, val) = "x" <> decimal key <> ": " <> buildExpr val
+    ppKeyVal (key, val) = fromLazyText key <> " : " <> buildExpr val
 
 -- | Constants
 data Const = Star | Box deriving (Eq, Show, Bounded, Enum)
@@ -62,19 +65,23 @@ rule Box  Star = return Star
 -- | Higher-order abstract syntax tree for expressions
 data Expr
     = Const Const
-    | Var Int
-    | Lam Expr (Expr -> Expr)
-    | Pi Expr (Expr -> Expr)
+    | Var Var
+    | Lam Var Expr Expr
+    | Pi  Var Expr Expr
     | App Expr Expr
 
 instance Eq Expr where
-    e1 == e2 = quote (normalize e1) == quote (normalize e2)
+    e1 == e2 = case cmp of
+        Nothing -> False
+        Just b  -> b
+      where
+        cmp = do
+            q1 <- quote (normalize e1)
+            q2 <- quote (normalize e2)
+            return (q1 == q2)
 
 instance Show Expr where
     show = unpack . pretty
-
-buildExpr :: Expr -> Builder
-buildExpr = buildQuoted . quote
 
 data Quoted
     = Const' Const
@@ -84,63 +91,66 @@ data Quoted
     | App' Quoted Quoted
     deriving (Eq, Show)
 
-buildQuoted :: Quoted -> Builder
-buildQuoted = go False False
+buildExpr :: Expr -> Builder
+buildExpr = go False False
   where
-    go :: Bool -> Bool -> Quoted -> Builder
+    go :: Bool -> Bool -> Expr -> Builder
     go parenBind parenApp e = case e of
-        Const' c    -> buildConst c
-        Var' n      -> "x" <> decimal n
-        Lam' n t e' ->
+        Const c    -> buildConst c
+        Var n      -> fromLazyText n
+        Lam n t e' ->
                 (if parenBind then "(" else "")
-            <>  "λ(x"
-            <>  decimal n
+            <>  "λ("
+            <>  fromLazyText n
             <>  " : "
             <>  go False False t
             <>  ") → "
             <>  go False False e'
             <>  (if parenBind then ")" else "")
-        Pi' n t e'  ->
+        Pi n t e'  ->
                 (if parenBind then "(" else "")
             <>  (if used n e
-                 then "∀(x" <> decimal n <> " : " <> go False False t <> ")"
+                 then "∀(" <> fromLazyText n <> " : " <> go False False t <> ")"
                  else go True False t )
             <>  " → "
             <>  go False False e'
             <>  (if parenBind then ")" else "")
-        App' f x    ->
+        App f x    ->
                 (if parenApp then "(" else "")
             <>  go True False f <> " " <> go True True x
             <>  (if parenApp then ")" else "")
 
-used :: Int -> Quoted -> Bool
+used :: Text -> Expr -> Bool
 used n e = case e of
-    Const' _            -> False
-    Var' n' | n == n'   -> True
-            | otherwise -> False
-    Lam' _ t e'         -> used n t || used n e'
-    Pi'  _ t e'         -> used n t || used n e'
-    App' f a            -> used n f || used n a
+    Const _            -> False
+    Var n' | n == n'   -> True
+           | otherwise -> False
+    Lam _ t e'         -> used n t || used n e'
+    Pi  _ t e'         -> used n t || used n e'
+    App f a            -> used n f || used n a
 
-quote :: Expr -> Quoted
-quote e0 = evalState (go e0) 1
+quote :: Expr -> Maybe Quoted
+quote e0 = evalStateT (go e0) (0, [])
   where
     go e = case e of
-        Const c -> return (Const' c)
-        Var   n -> return (Var' n)
-        Lam t f -> do
-            n <- get
-            put $! n + 1
-            t' <- go t
-            e' <- go (f (Var n))
-            return (Lam' n t' e')
-        Pi  t f -> do
-            n <- get
-            put $! n + 1
-            t' <- go t
-            e' <- go (f (Var n))
-            return (Pi' n t' e')
-        App f a -> do
+        Const c    -> return (Const' c)
+        Var n      -> do
+            (_, ps) <- get
+            k       <- lift (lookup n ps)
+            return (Var' k)
+        Lam n t e' -> do
+            (i, ps) <- get
+            put (i + 1, (n, i):ps)
+            t'  <- go t
+            e'' <- go e'
+            return (Lam' i t' e'')
+        Pi  n t e' -> do
+            (i, ps) <- get
+            put (i + 1, (n, i):ps)
+            t'  <- go t
+            e'' <- go e'
+            return (Pi' i t' e'')
+        App f a    -> do
             f' <- go f
             a' <- go a
             return (App' f' a')
@@ -149,36 +159,30 @@ quote e0 = evalState (go e0) 1
 pretty :: Expr -> Text
 pretty = toLazyText . buildExpr
 
-subst :: Int -> Expr -> Expr -> Expr
+subst :: Text -> Expr -> Expr -> Expr
 subst n0 e0 = go
   where
     go e = case e of
-        Lam t k  -> Lam (go t) (go . k)
-        Pi  t k  -> Pi  (go t) (go . k)
-        App f a  -> App (go f) (go a)
-        Var n    -> case e0 of
-            Var m -> Var (if n == n0 then m else n)
-            _ | n == n0   -> e0
-              | otherwise -> e
-        _        -> e
+        Lam n t e' -> if n == n0 then e else Lam n (go t) (go e')
+        Pi  n t e' -> if n == n0 then e else Pi  n (go t) (go e')
+        App f a    -> App (go f) (go a)
+        Var n      -> if (n == n0) then e0 else e
+        _          -> e
 
 typeOf_ :: Context -> Expr -> Either Text Expr
-typeOf_ ctx e0 = case e0 of
+typeOf_ ctx e = case e of
     Const c  -> fmap Const (axiom c)
-    Var x    -> case IntMap.lookup x ctx of
+    Var x    -> case lookup x ctx of
         Nothing -> Left (toLazyText (
                 header
             <>  "Error: Unbound variable\n" ) )
         Just a  -> return a
-    Lam _A k -> do
-        let x = case IntMap.keys ctx of
-                [] -> 0
-                es -> minimum es - 1
-        _B <- typeOf_ (IntMap.insert x _A ctx) (k (Var x))
-        let e = Pi _A (\e' -> subst x e' _B)
-        _t <- typeOf_ ctx e
-        return e
-    Pi  _A k -> do
+    Lam x _A b -> do
+        _B <- typeOf_ ((x, _A):ctx) b
+        let p = Pi x _A _B
+        _t <- typeOf_ ctx p
+        return p
+    Pi  x _A _B -> do
         eS <- fmap whnf (typeOf_ ctx _A)
         s  <- case eS of
             Const s -> return s
@@ -189,10 +193,7 @@ typeOf_ ctx e0 = case e0 of
                 <>  "Value: " <> buildExpr _A <> "\n"
                 <>  "Actual type: " <> buildExpr eS <> "\n"
                 <>  "Valid types: " <> buildConsts  <> "\n" ) )
-        let x = case IntMap.keys ctx of
-                [] -> 0
-                es -> minimum es - 1
-        eT <- fmap whnf (typeOf_ (IntMap.insert x _A ctx) (k (Var x)))
+        eT <- fmap whnf (typeOf_ ((x, _A):ctx) _B)
         t  <- case eT of
             Const t -> return t
             _       -> Left (toLazyText (
@@ -204,48 +205,48 @@ typeOf_ ctx e0 = case e0 of
         fmap Const (rule s t)
     App f a  -> do
         e       <- fmap whnf (typeOf_ ctx f)
-        (_A, k) <- case e of
-            Pi _A k -> return (_A, k)
+        (x, _A, _B) <- case e of
+            Pi x _A _B -> return (x, _A, _B)
             _          -> Left (toLazyText (
                     header
                 <>  "Error: Only functions may be applied to values\n" ) )
         _A' <- typeOf_ ctx a
-        let nf_A  = quote (normalize _A )
-            nf_A' = quote (normalize _A')
+        let nf_A  = normalize _A 
+            nf_A' = normalize _A'
         if nf_A == nf_A'
-            then return (k a)
+            then return (subst x a _B)
             else Left (toLazyText (
                     header
                 <>  "Error: Function applied to argument of the wrong type\n"
                 <>  "\n"
-                <>  "Expected type: " <> buildQuoted nf_A  <> "\n"
-                <>  "Argument type: " <> buildQuoted nf_A' <> "\n" ) )
+                <>  "Expected type: " <> buildExpr nf_A  <> "\n"
+                <>  "Argument type: " <> buildExpr nf_A' <> "\n" ) )
   where
     ppCtx = ppContext ctx
     header =
             (if Text.null (toLazyText ppCtx)
              then mempty
              else "Context:\n" <> ppContext ctx <> "\n")
-        <>  "Expression: " <> buildExpr e0 <> "\n"
+        <>  "Expression: " <> buildExpr e <> "\n"
         <>  "\n"
 
 -- | Type-check an expression and return the expression's type
 typeOf :: Expr -> Either Text Expr
-typeOf = typeOf_ IntMap.empty
+typeOf = typeOf_ []
 
 whnf :: Expr -> Expr
 whnf e = case e of
     App f _C -> case whnf f of
-        Lam _ k -> whnf (k _C)
-        _       -> e
+        Lam x _A _B -> whnf (subst x _C _B)
+        _           -> e
     _    -> e
 
 -- | Reduce an expression to normal form
 normalize :: Expr -> Expr
 normalize e = case e of
-    Lam t k  -> Lam (normalize t) (normalize . k)
-    Pi  t k  -> Pi  (normalize t) (normalize . k)
-    App f _C -> case normalize f of
-        Lam _ k -> normalize (k _C)
-        _       -> e
+    Lam x t e' -> Lam x (normalize t) (normalize e')
+    Pi  x t e' -> Pi  x (normalize t) (normalize e')
+    App f _C   -> case normalize f of
+        Lam x _A _B -> normalize (subst x _C _B)
+        _           -> e
     _       -> e
