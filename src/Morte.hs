@@ -49,18 +49,25 @@ module Morte (
     normalize,
 
     -- * Utilities
+    parse,
     pretty,
     explain,
     printValue,
     printType,
     ) where
 
+import Control.Applicative (pure, (<$>), (<*>), (*>), (<*), (<|>))
 import Control.Exception (Exception)
+import Control.Monad (void)
 import Control.Monad.Trans.State (State, evalState, get, modify)
+import qualified Data.Attoparsec.Text.Lazy as A
+import Data.Attoparsec.Text.Lazy (Parser)
+import Data.Char (isSpace)
 import Data.Monoid (mempty, (<>))
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.String (IsString(fromString))
+import Data.Text ()  -- For the `IsString` instance
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.IO as Text
@@ -68,9 +75,9 @@ import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 
--- TODO: Add a parser
 -- TODO: Include example use cases in module header
 -- TODO: Add `Binary` instance
+-- TODO: Document all functions
 
 {-| Label for a bound variable
 
@@ -275,6 +282,7 @@ pretty = toLazyText . buildExpr
 explain :: TypeError -> Text
 explain = toLazyText . buildTypeError
 
+-- | Find all free variables with a given label and return their numeric suffixes
 freeOf :: Text -> Expr -> IntSet
 freeOf txt = go
   where
@@ -286,6 +294,7 @@ freeOf txt = go
         App f a                      -> IntSet.union (go f) (go a)
         Const _                      -> IntSet.empty
 
+-- | Substitute all occurrences of a variable with an expression
 subst :: Var -> Expr -> Expr -> Expr
 subst x0 e0 = go
   where
@@ -307,6 +316,7 @@ subst x0 e0 = go
                     in  c x' (go _A) (go (subst x (Var x') b))
                 else c x (go _A) (go b)
 
+-- | Compute the type of an expression, given a context
 typeOf_ :: Context -> Expr -> Either TypeError Expr
 typeOf_ ctx e = case e of
     Const c  -> fmap Const (axiom c)
@@ -352,6 +362,7 @@ typeOf_ ctx e = case e of
 typeOf :: Expr -> Either TypeError Expr
 typeOf = typeOf_ []
 
+-- | Reduce an expression to weak-head normal form
 whnf :: Expr -> Expr
 whnf e = case e of
     App f a -> case whnf f of
@@ -359,6 +370,7 @@ whnf e = case e of
         _          -> e
     _       -> e
 
+-- | Returns whether a variable is free in an expression
 freeIn :: Var -> Expr -> Bool
 freeIn x = go
   where
@@ -407,3 +419,87 @@ printType :: Expr -> IO ()
 printType expr = case typeOf expr of
     Left err -> Text.putStr (explain err)
     Right t  -> Text.putStrLn (pretty t)
+
+-- | Parser for a single expression
+parse :: Parser Expr
+parse = A.skipSpace *> parseExpr <* A.skipSpace
+
+parseExpr :: Parser Expr
+parseExpr = parseLam <|> parsePi <|> parseBExpr
+
+parsePi :: Parser Expr
+parsePi = parseBind Pi skipPi <|> parsePiSimple
+
+parsePiSimple :: Parser Expr
+parsePiSimple =
+        Pi "_"
+    <$> (parseBExpr <* A.skipSpace)
+    <*> (   (skipArrow  <* A.skipSpace)
+        *>   parseExpr
+        )
+
+parseLam :: Parser Expr
+parseLam = parseBind Lam skipLambda
+
+parseBind :: (Var -> Expr -> Expr -> Expr) -> Parser () -> Parser Expr
+parseBind c symbol =
+        c
+    <$> (   (symbol     <* A.skipSpace)
+        *>  (A.char '(' <* A.skipSpace)
+        *>  (parseVar   <* A.skipSpace)
+        )
+    <*> (   (A.char ':' <* A.skipSpace)
+        *>  (parseExpr  <* A.skipSpace)
+        )
+    <*> (   (A.char ')' <* A.skipSpace)
+        *>  (skipArrow  <* A.skipSpace)
+        *>   parseExpr
+        )
+
+skipLambda :: Parser ()
+skipLambda =
+        void (A.char   'λ'  )
+    <|> void (A.char   'Λ'  )
+    <|> void (A.char   '\\' )
+    <|> void (A.string "/\\")
+
+skipPi :: Parser ()
+skipPi =
+        void (A.char   '∀'      )
+    <|> void (A.char   'Π'      )
+    <|> void (A.string "|~|"    )
+    <|> void (A.string "\\/"    )
+    <|> void (A.string "forall ")
+
+skipArrow :: Parser ()
+skipArrow =
+        void (A.char   '→' )
+    <|> void (A.string "->")
+
+parseBExpr :: Parser Expr
+parseBExpr = foldr1 App <$> A.sepBy1 parseAExpr (A.space *> A.skipSpace)
+
+parseAExpr :: Parser Expr
+parseAExpr =
+        A.char '(' *> A.skipSpace *> parseExpr <* A.char ')'
+    <|> parseConst
+    <|> Var <$> parseVar
+
+parseVar :: Parser Var
+parseVar = V <$> txt <*> n
+ where
+    p c =   not (isSpace c)
+        &&  c /= '('
+        &&  c /= ')'
+        &&  c /= '@'
+        &&  c /= '-'
+        &&  c /= '→'
+    txt = Text.fromStrict <$> A.takeWhile1 p
+    n   = A.char '@' *> A.decimal <|> pure 0
+
+parseConst :: Parser Expr
+parseConst =
+        Const
+    <$> (    A.string "*" *> pure Star
+        <|> (void (A.string "BOX") <|> void (A.char '□')) *> pure Box
+        )
