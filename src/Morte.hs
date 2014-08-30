@@ -31,12 +31,12 @@ module Morte (
     Const(..),
     Expr(..),
 
-    -- * Functions
+    -- * Core operations
     typeOf,
     normalize,
-    pretty,
 
     -- * Utilities
+    pretty,
     printValue,
     printType
     ) where
