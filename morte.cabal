@@ -8,8 +8,8 @@ Copyright: 2014 Gabriel Gonzalez
 Author: Gabriel Gonzalez
 Maintainer: Gabriel439@gmail.com
 Bug-Reports: https://github.com/Gabriel439/Haskell-Morte-Library/issues
-Synopsis: Bare-bones calculus-of-constructions
-Description: Bare-bones calculus-of-constructions
+Synopsis: Bare-bones calculus of constructions
+Description: Bare-bones calculus of constructions
 Category: Compiler
 Source-Repository head
     Type: git
