@@ -345,7 +345,10 @@ normalize e = case e of
     Var   _    -> e
     Const _    -> e
 
--- | Convenience function to pretty-print an expression to the console
+{-| Convenience function to pretty-print an expression to the console
+
+    `printValue` does not type-check the expression.
+-}
 printValue :: Expr -> IO ()
 printValue = Text.putStrLn . pretty
 
