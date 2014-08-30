@@ -50,8 +50,8 @@ module Morte (
 
     -- * Errors
     Context,
+    TypeMessage(..),
     TypeError(..),
-    ErrorMessage(..),
     explain
     ) where
 
@@ -69,7 +69,6 @@ import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 
 -- TODO: Add a parser
--- TODO: Provide a structured error type
 -- TODO: Include example use cases in module header
 -- TODO: Add `Binary` instance
 
@@ -223,7 +222,7 @@ pretty :: Expr -> Text
 pretty = toLazyText . buildExpr
 
 -- | The specific type error
-data ErrorMessage
+data TypeMessage
     = UnboundVariable
     | InvalidInputType Expr
     | InvalidOutputType Expr
@@ -232,10 +231,8 @@ data ErrorMessage
     | Untyped Const
     deriving (Show, Typeable)
 
-instance Exception ErrorMessage
-
-buildErrorMessage :: ErrorMessage -> Builder
-buildErrorMessage msg = case msg of
+buildTypeMessage :: TypeMessage -> Builder
+buildTypeMessage msg = case msg of
     UnboundVariable          ->
             "Error: Unbound variable\n"
     InvalidInputType expr    ->
@@ -256,11 +253,11 @@ buildErrorMessage msg = case msg of
     Untyped c                ->
             "Error: " <> buildConst c <> " has no type\n"
 
--- | A structured type error
+-- | A structured type error that includes context
 data TypeError = TypeError
     { context :: Context
     , current :: Expr
-    , message :: ErrorMessage
+    , message :: TypeMessage
     } deriving (Show, Typeable)
 
 instance Exception TypeError
@@ -273,7 +270,7 @@ buildTypeError (TypeError ctx expr msg)
         )
     <>  "Expression: " <> buildExpr expr <> "\n"
     <>  "\n"
-    <>  buildErrorMessage msg
+    <>  buildTypeMessage msg
   where
     ppCtx = ppContext ctx
 
