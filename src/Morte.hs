@@ -120,13 +120,21 @@ rule Box  Star = return Star
 
 -- | Syntax tree for expressions
 data Expr
+    -- | > Const c        ~  c
     = Const Const
+    -- | > Var (V x 0)    ~  x
+    --   > Var (V x n)    ~  xn
     | Var Var
+    -- | > Lam x A b      ~  λ(x : A) → b
     | Lam Var Expr Expr
+    -- | > Pi x      A B  ~  ∀(x : A) → B
+    --   > Pi unused A B  ~        A  → B
     | Pi  Var Expr Expr
+    -- | > App f a        ~  f a
     | App Expr Expr
     deriving (Show)
 
+    -- @Var (V x 0)  ~  x             |  Var (V x n)    ~  xn@
 instance Eq Expr where
     eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
       where
@@ -295,14 +303,16 @@ typeOf_ ctx e = case e of
         <>  "Expression: " <> buildExpr e <> "\n"
         <>  "\n"
 
--- | Type-check an expression and return the expression's type
+{-| Type-check an expression and return the expression's type if type-checking
+    suceeds or an error if type-checking fails
+-}
 typeOf :: Expr -> Either Text Expr
 typeOf = typeOf_ []
 
 whnf :: Expr -> Expr
 whnf e = case e of
     App f a -> case whnf f of
-        Lam x _A b -> whnf (subst x a b)
+        Lam x _A b -> whnf (subst x a b)  -- Beta reduce
         _          -> e
     _       -> e
 
@@ -316,7 +326,7 @@ freeIn x = go
         App f a     -> go f || go a
         Const _     -> False
 
--- | Reduce an expression to normal form
+-- | Reduce an expression to its normal form
 normalize :: Expr -> Expr
 normalize e = case e of
     Lam x _A b -> case b' of
