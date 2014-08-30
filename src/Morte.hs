@@ -5,7 +5,7 @@
 
 module Morte (
     -- * Types
-    Var,
+    Var(..),
     Const(..),
     Expr(..),
 
@@ -21,14 +21,17 @@ module Morte (
 
 import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Monoid (mempty, (<>))
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.String (IsString(fromString))
-import Data.Text.Lazy (Text, cons)
+import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 
 -- TODO: Add a parser
+-- TODO: Provide a structured error type
 -- TODO: Add support for '_' (unused variables)?
 
 -- | Label for a bound variable
@@ -87,22 +90,22 @@ instance Eq Expr where
       where
         go :: Expr -> Expr -> State [(Var, Var)] Bool
         go (Const cL) (Const cR) = return (cL == cR)
-        go (Var nL) (Var nR) = do
+        go (Var xL) (Var xR) = do
             ctx <- get
-            let n = case lookup nL ctx of
-                    Nothing  -> nL
-                    Just nR' -> nR'
-            return (n == nR)
-        go (Lam nL tL eL) (Lam nR tR eR) = do
-            modify ((nL, nR):)
-            b1 <- go tL tR
-            b2 <- go eL eR
-            return (b1 && b2)
-        go (Pi nL tL eL) (Pi nR tR eR) = do
-            modify ((nL, nR):)
-            b1 <- go tL tR
-            b2 <- go eL eR
-            return (b1 && b2)
+            let x = case lookup xL ctx of
+                    Nothing  -> xL
+                    Just xR' -> xR'
+            return (x == xR)
+        go (Lam xL tL bL) (Lam xR tR bR) = do
+            modify ((xL, xR):)
+            eq1 <- go tL tR
+            eq2 <- go bL bR
+            return (eq1 && eq2)
+        go (Pi xL tL bL) (Pi xR tR bR) = do
+            modify ((xL, xR):)
+            eq1 <- go tL tR
+            eq2 <- go bL bR
+            return (eq1 && eq2)
         go (App fL aL) (App fR aR) = do
             b1 <- go fL fR
             b2 <- go aL aR
@@ -119,71 +122,75 @@ buildExpr = go False False
     go :: Bool -> Bool -> Expr -> Builder
     go parenBind parenApp e = case e of
         Const c    -> buildConst c
-        Var v      -> buildVar v
-        Lam v t e' ->
+        Var x      -> buildVar x
+        Lam x _A b ->
                 (if parenBind then "(" else "")
             <>  "λ("
-            <>  buildVar v
+            <>  buildVar x
             <>  " : "
-            <>  go False False t
+            <>  go False False _A 
             <>  ") → "
-            <>  go False False e'
+            <>  go False False b
             <>  (if parenBind then ")" else "")
-        Pi  v t e' ->
+        Pi  x _A b ->
                 (if parenBind then "(" else "")
-            <>  (if used v e
-                 then "∀(" <> buildVar v <> " : " <> go False False t <> ")"
-                 else go True False t )
+            <>  (if used x e
+                 then "∀(" <> buildVar x <> " : " <> go False False _A <> ")"
+                 else go True False _A )
             <>  " → "
-            <>  go False False e'
+            <>  go False False b
             <>  (if parenBind then ")" else "")
-        App f x    ->
+        App f a    ->
                 (if parenApp then "(" else "")
-            <>  go True False f <> " " <> go True True x
+            <>  go True False f <> " " <> go True True a
             <>  (if parenApp then ")" else "")
 
 used :: Var -> Expr -> Bool
-used v e = case e of
-    Const _            -> False
-    Var v' | v == v'   -> True
-           | otherwise -> False
-    Lam _ t e'         -> used v t || used v e'
-    Pi  _ t e'         -> used v t || used v e'
-    App f a            -> used v f || used v a
+used x = go
+  where
+    go e = case e of
+        Var x' | x == x'   -> True
+               | otherwise -> False
+        Lam _ _A b         -> go _A || go b
+        Pi  _ _A b         -> go _A || go b
+        App f a            -> go f || go a
+        Const _            -> False
 
 -- | Render an expression as pretty-printed `Text`
 pretty :: Expr -> Text
 pretty = toLazyText . buildExpr
 
-toOdd :: Integer -> Integer
-toOdd n = 2 * n + 1
-
-toEven :: Integer -> Integer
-toEven n = 2 * n
-
-renumber :: (Integer -> Integer) -> Expr -> Expr
-renumber k = go 
+freeOf :: Text -> Expr -> Set Integer
+freeOf txt = go
   where
     go e = case e of
-        Lam v@(V n l) t e' ->
-            let v' = V (k n) l in Lam v' t (subst v (Var v') e')
-        Pi  v@(V n l) t e' ->
-            let v' = V (k n) l in Pi  v' t (subst v (Var v') e')
-        App f a            -> App (go f) (go a)
-        _                  -> e
+        Var (V n txt') | txt == txt' -> Set.singleton n
+                       | otherwise   -> Set.empty
+        Lam (V n _   )  _ b          -> Set.delete n (go b)
+        Pi  (V n _   )  _ b          -> Set.delete n (go b)
+        App f a                      -> Set.union (go f) (go a)
+        Const _                      -> Set.empty
 
 subst :: Var -> Expr -> Expr -> Expr
-subst n0 eL eR = go eR'
+subst x0 e0 = go
   where
     go e = case e of
-        Lam n t e' -> if n == n0 then e else Lam n (go t) (go e')
-        Pi  n t e' -> if n == n0 then e else Pi  n (go t) (go e')
+        Lam x _A b -> helper Lam x _A b
+        Pi  x _A b -> helper Pi  x _A b
         App f a    -> App (go f) (go a)
-        Var n      -> if (n == n0) then eL' else e
-        _          -> e
+        Var x      -> if (x == x0) then e0 else e
+        Const _    -> e
 
-    eL' = renumber toOdd  eL
-    eR' = renumber toEven eR
+    helper c x@(V n txt) _A b =
+        if x == x0
+        then c x _A b  -- x shadows x0
+        else
+            let fs1 = Set.union (freeOf txt (Var x0)) (freeOf txt e0)
+            in  if Set.member n fs1
+                then
+                    let x' = V (Set.findMax fs1 + 1) txt
+                    in  c x' (go _A) (go (subst x (Var x') b))
+                else c x (go _A) (go b)
 
 typeOf_ :: Context -> Expr -> Either Text Expr
 typeOf_ ctx e = case e of
@@ -252,28 +259,39 @@ typeOf = typeOf_ []
 
 whnf :: Expr -> Expr
 whnf e = case e of
-    App f _C -> case whnf f of
-        Lam x _A _B -> whnf (subst x _C _B)
-        _           -> e
-    _    -> e
+    App f a -> case whnf f of
+        Lam x _A b -> whnf (subst x a b)
+        _          -> e
+    _       -> e
+
+freeIn :: Var -> Expr -> Bool
+freeIn x = go
+  where
+    go e = case e of
+        Lam x' _A b -> x /= x' && (go _A || go b)
+        Pi  x' _A b -> x /= x' && (go _A || go b)
+        Var x'      -> x == x'
+        App f a     -> go f || go a
+        Const _     -> False
 
 -- | Reduce an expression to normal form
 normalize :: Expr -> Expr
 normalize e = case e of
-    Lam x t e' -> case normalize e' of
+    Lam x _A b -> case b' of
         App f a -> case normalize a of
-            Var x' | x == x'   -> normalize f
-                   | otherwise -> l
-            _                  -> l
-        _                      -> l
+            Var x' | x == x' && not (x `freeIn` f) -> normalize f  -- Eta reduce
+                   | otherwise                     -> e'
+            _                                      -> e'
+        _       -> e'
       where
-        e'' = normalize e'
-        l   = Lam x (normalize t) e''
-    Pi  x t e' -> Pi  x (normalize t) (normalize e')
+        b' = normalize b
+        e' = Lam x (normalize _A) b'
+    Pi  x _A b -> Pi  x (normalize _A) (normalize b)
     App f _C   -> case normalize f of
-        Lam x _A _B -> normalize (subst x _C _B)
+        Lam x _A _B -> normalize (subst x _C _B)  -- Beta reduce
         f'          -> App f' (normalize _C)
-    _       -> e
+    Var   _    -> e
+    Const _    -> e
 
 -- | Pretty-print an expression
 printValue :: Expr -> IO ()
