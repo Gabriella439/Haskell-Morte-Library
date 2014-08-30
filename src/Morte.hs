@@ -34,10 +34,15 @@
 -}
 
 module Morte (
-    -- * Types
+    -- * Syntax
     Var(..),
     Const(..),
     Expr(..),
+
+    -- * Errors
+    Context,
+    TypeMessage(..),
+    TypeError(..),
 
     -- * Core operations
     typeOf,
@@ -45,14 +50,9 @@ module Morte (
 
     -- * Utilities
     pretty,
+    explain,
     printValue,
     printType,
-
-    -- * Errors
-    Context,
-    TypeMessage(..),
-    TypeError(..),
-    explain
     ) where
 
 import Control.Exception (Exception)
@@ -86,18 +86,6 @@ instance IsString Var
   where
     fromString str = V (Text.pack str) 0
 
-buildVar :: Var -> Builder
-buildVar (V txt n) = fromLazyText txt <> if n == 0 then mempty else decimal n
-
--- | Bound variables and their types
-type Context = [(Var, Expr)]
-
-ppContext :: Context -> Builder
-ppContext =
-    fromLazyText . Text.unlines . map (toLazyText . ppKeyVal) . reverse
-  where
-    ppKeyVal (key, val) = buildVar key <> " : " <> buildExpr val
-
 {-| Constants for the calculus of constructions
 
     The only axiom is:
@@ -113,11 +101,6 @@ ppContext =
 
 -}
 data Const = Star | Box deriving (Eq, Show, Bounded, Enum)
-
-buildConst :: Const -> Builder
-buildConst c = case c of
-    Star -> "*"
-    Box  -> "□"
 
 axiom :: Const -> Either TypeError Const
 axiom Star = return Box
@@ -145,7 +128,6 @@ data Expr
     | App Expr Expr
     deriving (Show)
 
-    -- @Var (V x 0)  ~  x             |  Var (V x n)    ~  xn@
 instance Eq Expr where
     eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
       where
@@ -177,6 +159,36 @@ instance IsString Expr
   where
     fromString str = Var (fromString str)
 
+-- | Bound variables and their types
+type Context = [(Var, Expr)]
+
+-- | The specific type error
+data TypeMessage
+    = UnboundVariable
+    | InvalidInputType Expr
+    | InvalidOutputType Expr
+    | NotAFunction
+    | TypeMismatch Expr Expr
+    | Untyped Const
+    deriving (Show, Typeable)
+
+-- | A structured type error that includes context
+data TypeError = TypeError
+    { context :: Context
+    , current :: Expr
+    , message :: TypeMessage
+    } deriving (Show, Typeable)
+
+instance Exception TypeError
+
+buildConst :: Const -> Builder
+buildConst c = case c of
+    Star -> "*"
+    Box  -> "□"
+
+buildVar :: Var -> Builder
+buildVar (V txt n) = fromLazyText txt <> if n == 0 then mempty else decimal n
+
 buildExpr :: Expr -> Builder
 buildExpr = go False False
   where
@@ -206,30 +218,16 @@ buildExpr = go False False
             <>  go True False f <> " " <> go True True a
             <>  (if parenApp then ")" else "")
 
-used :: Var -> Expr -> Bool
-used x = go
-  where
-    go e = case e of
-        Var x' | x == x'   -> True
-               | otherwise -> False
-        Lam _ _A b         -> go _A || go b
-        Pi  _ _A b         -> go _A || go b
-        App f a            -> go f || go a
-        Const _            -> False
-
--- | Render an expression as pretty-printed `Text`
-pretty :: Expr -> Text
-pretty = toLazyText . buildExpr
-
--- | The specific type error
-data TypeMessage
-    = UnboundVariable
-    | InvalidInputType Expr
-    | InvalidOutputType Expr
-    | NotAFunction
-    | TypeMismatch Expr Expr
-    | Untyped Const
-    deriving (Show, Typeable)
+    used :: Var -> Expr -> Bool
+    used x = go'
+      where
+        go' e = case e of
+            Var x' | x == x'   -> True
+                   | otherwise -> False
+            Lam _ _A b         -> go' _A || go' b
+            Pi  _ _A b         -> go' _A || go' b
+            App f a            -> go' f || go' a
+            Const _            -> False
 
 buildTypeMessage :: TypeMessage -> Builder
 buildTypeMessage msg = case msg of
@@ -253,28 +251,27 @@ buildTypeMessage msg = case msg of
     Untyped c                ->
             "Error: " <> buildConst c <> " has no type\n"
 
--- | A structured type error that includes context
-data TypeError = TypeError
-    { context :: Context
-    , current :: Expr
-    , message :: TypeMessage
-    } deriving (Show, Typeable)
-
-instance Exception TypeError
-
 buildTypeError :: TypeError -> Builder
 buildTypeError (TypeError ctx expr msg)
-    =   (    if Text.null (toLazyText ppCtx)
+    =   (    if Text.null (toLazyText buildContext )
              then mempty
-             else "Context:\n" <> ppCtx <> "\n"
+             else "Context:\n" <> buildContext <> "\n"
         )
     <>  "Expression: " <> buildExpr expr <> "\n"
     <>  "\n"
     <>  buildTypeMessage msg
   where
-    ppCtx = ppContext ctx
+    buildKV (key, val) = buildVar key <> " : " <> buildExpr val
 
--- | Render a type exception as pretty-printed `Text`
+    buildContext =
+        (fromLazyText . Text.unlines . map (toLazyText . buildKV) . reverse) ctx
+
+
+-- | Render an expression as pretty-printed `Text`
+pretty :: Expr -> Text
+pretty = toLazyText . buildExpr
+
+-- | Render a type error as pretty-printed `Text`
 explain :: TypeError -> Text
 explain = toLazyText . buildTypeError
 
