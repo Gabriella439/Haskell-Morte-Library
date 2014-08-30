@@ -1,28 +1,36 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{-| This module contains the core calculus for the Morte language.  This language
+{-| Morte is a typed, purely functional, and strongly normalizing term rewriting
+    system designed as an intermediate language for compilers.  Use this library
+    to type-check, normalize, parse, pretty-print, serialize and deserialize
+    expressions in this intermediate language.
+
+
+    This module contains the core calculus for the Morte language.  This language
     is a minimalist implementation of the calculus of constructions, which is in
     turn a specific kind of pure type system.  If you are new to pure type
     systems you may wish to read:
     <http://research.microsoft.com/en-us/um/people/simonpj/papers/henk.ps.gz Henk: a typed intermediate language>.
 
-    Morte emphasizes one important feature:
 
-    * All expressions are strongly normalizable (using `normalize`)
-    * Expressions can be tested for equality (using `==`)
+    Morte is a strongly normalizing language, meaning that:
 
-
-    These two features give rise to the following emergent properties:
-
-    * Programs that are equal (via equational reasoning) normalize to identical
-      expressions (modulo alpha conversion), generate identical machine code, and
-      yield identical performance
-    * When you `normalize` your program, you only pay for abstraction at
-      compile-time, not run-time
+    * Every expression has a unique normal form computed by `normalize`
+    * You test expressions for equality of their normal forms using `==`
+    * Equational reasoning preserves normal forms
 
 
-    This comes at a price: Morte forbids recursion.  Instead, you must translate
-    all recursion to F-algebras and translate all corecursion to F-coalgebras.
+    If you strongly normalize every expression then:
+
+    * Equal expressions generate identical machine code
+    * You only pay for all abstraction at compile-time instead of run-time
+
+
+    Strong normalization comes at a price: Morte forbids recursion.  Instead, you
+    must translate all recursion to F-algebras and translate all corecursion to
+    F-coalgebras.  If you are new to F-(co)algebras then you may wish to read:
+    <http://homepages.inf.ed.ac.uk/wadler/papers/free-rectypes/free-rectypes.txt Recursive types for free!>
+
 -}
 
 module Morte (
@@ -54,7 +62,8 @@ import Data.Text.Lazy.Builder.Int (decimal)
 
 -- TODO: Add a parser
 -- TODO: Provide a structured error type
--- TODO: Add support for '_' (unused variables)?
+-- TODO: Include example use cases in module header
+-- TODO: Add `Binary` instance
 
 {-| Label for a bound variable
 
@@ -235,10 +244,10 @@ subst x0 e0 = go
         if x == x0
         then c x _A b  -- x shadows x0
         else
-            let fs1 = IntSet.union (freeOf txt (Var x0)) (freeOf txt e0)
-            in  if IntSet.member n fs1
+            let fs = IntSet.union (freeOf txt (Var x0)) (freeOf txt e0)
+            in  if IntSet.member n fs
                 then
-                    let x' = V txt (IntSet.findMax fs1 + 1)
+                    let x' = V txt (IntSet.findMax fs + 1)
                     in  c x' (go _A) (go (subst x (Var x') b))
                 else c x (go _A) (go b)
 
@@ -305,6 +314,11 @@ typeOf_ ctx e = case e of
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
+
+    The expression must be closed (no free variables), otherwise type-checking
+    will fail.
+
+    `typeOf` does not necessarily normalize the type.
 -}
 typeOf :: Expr -> Either Text Expr
 typeOf = typeOf_ []
@@ -326,7 +340,10 @@ freeIn x = go
         App f a     -> go f || go a
         Const _     -> False
 
--- | Reduce an expression to its normal form
+{-| Reduce an expression to its normal form
+
+    `normalize` does not type-check the expression.
+-}
 normalize :: Expr -> Expr
 normalize e = case e of
     Lam x _A b -> case b' of
@@ -347,13 +364,15 @@ normalize e = case e of
 
 {-| Convenience function to pretty-print an expression to the console
 
-    `printValue` does not type-check the expression.
+    `printValue` does not type-check or normalize the expression.
 -}
 printValue :: Expr -> IO ()
 printValue = Text.putStrLn . pretty
 
 {-| Convenience function to pretty print an expression's type, or output an error
     message if type checking fails
+
+    `printType` does not necessarily normalize the type.
 -}
 printType :: Expr -> IO ()
 printType expr = case typeOf expr of
