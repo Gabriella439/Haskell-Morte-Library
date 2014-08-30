@@ -1,6 +1,28 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{-| A bare-bones calculus-of-constructions
+{-| This module contains the core calculus for the Morte language.  This language
+    is a minimalist implementation of the calculus of constructions, which is in
+    turn a specific kind of pure type system.  If you are new to pure type
+    systems you may wish to read:
+    <http://research.microsoft.com/en-us/um/people/simonpj/papers/henk.ps.gz Henk: a typed intermediate language>.
+
+    Morte emphasizes one important feature:
+
+    * All expressions are strongly normalizable (using `normalize`)
+    * Expressions can be tested for equality (using `==`)
+
+
+    These two features give rise to the following emergent properties:
+
+    * Programs that are equal (via equational reasoning) normalize to identical
+      expressions (modulo alpha conversion), generate identical machine code, and
+      yield identical performance
+    * When you `normalize` your program, you only pay for abstraction at
+      compile-time, not run-time
+
+
+    This comes at a price: Morte forbids recursion.  Instead, you must translate
+    all recursion to F-algebras and translate all corecursion to F-coalgebras.
 -}
 
 module Morte (
@@ -21,8 +43,8 @@ module Morte (
 
 import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Monoid (mempty, (<>))
-import Data.Set (Set)
-import qualified Data.Set as Set
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
 import Data.String (IsString(fromString))
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
@@ -34,15 +56,22 @@ import Data.Text.Lazy.Builder.Int (decimal)
 -- TODO: Provide a structured error type
 -- TODO: Add support for '_' (unused variables)?
 
--- | Label for a bound variable
-data Var = V Integer Text deriving (Eq, Show)
+{-| Label for a bound variable
+
+    The `Text` field is the variable's name.
+
+    The `Int` field disambiguates variables with the same name.  Zero is a good
+    default.  Non-zero values will appear as a numeric suffix when
+    pretty-printing the `Var`.
+-}
+data Var = V Text Int deriving (Eq, Show)
 
 instance IsString Var
   where
-    fromString str = V 0 (Text.pack str)
+    fromString str = V (Text.pack str) 0
 
 buildVar :: Var -> Builder
-buildVar (V n txt) = fromLazyText txt <> if n == 0 then mempty else decimal n
+buildVar (V txt n) = fromLazyText txt <> if n == 0 then mempty else decimal n
 
 type Context = [(Var, Expr)]
 
@@ -52,13 +81,26 @@ ppContext =
   where
     ppKeyVal (key, val) = buildVar key <> " : " <> buildExpr val
 
--- | Constants
+{-| Constants for the calculus of constructions
+
+    The only axiom is:
+
+> ⊦ * : □
+
+    ... and all four rule pairs are valid:
+
+> ⊦ * ↝ * : *
+> ⊦ □ ↝ * : *
+> ⊦ * ↝ □ : □
+> ⊦ □ ↝ □ : □
+
+-}
 data Const = Star | Box deriving (Eq, Show, Bounded, Enum)
 
 buildConst :: Const -> Builder
 buildConst c = case c of
     Star -> "*"
-    Box  -> "BOX"
+    Box  -> "□"
 
 buildConsts :: Builder
 buildConsts =
@@ -68,7 +110,7 @@ buildConsts =
 
 axiom :: Const -> Either Text Const
 axiom Star = return Box
-axiom Box  = Left "BOX has no type\n"
+axiom Box  = Left "□ has no type\n"
 
 rule :: Const -> Const -> Either Text Const
 rule Star Box  = return Box
@@ -160,16 +202,16 @@ used x = go
 pretty :: Expr -> Text
 pretty = toLazyText . buildExpr
 
-freeOf :: Text -> Expr -> Set Integer
+freeOf :: Text -> Expr -> IntSet
 freeOf txt = go
   where
     go e = case e of
-        Var (V n txt') | txt == txt' -> Set.singleton n
-                       | otherwise   -> Set.empty
-        Lam (V n _   )  _ b          -> Set.delete n (go b)
-        Pi  (V n _   )  _ b          -> Set.delete n (go b)
-        App f a                      -> Set.union (go f) (go a)
-        Const _                      -> Set.empty
+        Var (V txt' n) | txt == txt' -> IntSet.singleton n
+                       | otherwise   -> IntSet.empty
+        Lam (V _ n   )  _ b          -> IntSet.delete n (go b)
+        Pi  (V _ n   )  _ b          -> IntSet.delete n (go b)
+        App f a                      -> IntSet.union (go f) (go a)
+        Const _                      -> IntSet.empty
 
 subst :: Var -> Expr -> Expr -> Expr
 subst x0 e0 = go
@@ -181,14 +223,14 @@ subst x0 e0 = go
         Var x      -> if (x == x0) then e0 else e
         Const _    -> e
 
-    helper c x@(V n txt) _A b =
+    helper c x@(V txt n) _A b =
         if x == x0
         then c x _A b  -- x shadows x0
         else
-            let fs1 = Set.union (freeOf txt (Var x0)) (freeOf txt e0)
-            in  if Set.member n fs1
+            let fs1 = IntSet.union (freeOf txt (Var x0)) (freeOf txt e0)
+            in  if IntSet.member n fs1
                 then
-                    let x' = V (Set.findMax fs1 + 1) txt
+                    let x' = V txt (IntSet.findMax fs1 + 1)
                     in  c x' (go _A) (go (subst x (Var x') b))
                 else c x (go _A) (go b)
 
@@ -293,12 +335,12 @@ normalize e = case e of
     Var   _    -> e
     Const _    -> e
 
--- | Pretty-print an expression
+-- | Convenience function to pretty-print an expression to the console
 printValue :: Expr -> IO ()
 printValue = Text.putStrLn . pretty
 
-{-| Pretty print an expression's type, or output an error message if type
-    checking fails
+{-| Convenience function to pretty print an expression's type, or output an error
+    message if type checking fails
 -}
 printType :: Expr -> IO ()
 printType expr = case typeOf expr of
