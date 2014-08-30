@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 
 {-| Morte is a typed, purely functional, and strongly normalizing term rewriting
     system designed as an intermediate language for compilers.  Use this library
@@ -46,9 +46,16 @@ module Morte (
     -- * Utilities
     pretty,
     printValue,
-    printType
+    printType,
+
+    -- * Errors
+    Context,
+    TypeError(..),
+    ErrorMessage(..),
+    explain
     ) where
 
+import Control.Exception (Exception)
 import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Monoid (mempty, (<>))
 import Data.IntSet (IntSet)
@@ -59,6 +66,7 @@ import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
+import Data.Typeable (Typeable)
 
 -- TODO: Add a parser
 -- TODO: Provide a structured error type
@@ -82,6 +90,7 @@ instance IsString Var
 buildVar :: Var -> Builder
 buildVar (V txt n) = fromLazyText txt <> if n == 0 then mempty else decimal n
 
+-- | Bound variables and their types
 type Context = [(Var, Expr)]
 
 ppContext :: Context -> Builder
@@ -111,17 +120,11 @@ buildConst c = case c of
     Star -> "*"
     Box  -> "□"
 
-buildConsts :: Builder
-buildConsts =
-    fromLazyText (
-        Text.intercalate ", " (
-            map (toLazyText . buildConst) [minBound..maxBound] ) )
-
-axiom :: Const -> Either Text Const
+axiom :: Const -> Either TypeError Const
 axiom Star = return Box
-axiom Box  = Left "□ has no type\n"
+axiom Box  = Left (TypeError [] (Const Box) (Untyped Box))
 
-rule :: Const -> Const -> Either Text Const
+rule :: Const -> Const -> Either TypeError Const
 rule Star Box  = return Box
 rule Star Star = return Star
 rule Box  Box  = return Box
@@ -219,6 +222,65 @@ used x = go
 pretty :: Expr -> Text
 pretty = toLazyText . buildExpr
 
+-- | The specific type error
+data ErrorMessage
+    = UnboundVariable
+    | InvalidInputType Expr
+    | InvalidOutputType Expr
+    | NotAFunction
+    | TypeMismatch Expr Expr
+    | Untyped Const
+    deriving (Show, Typeable)
+
+instance Exception ErrorMessage
+
+buildErrorMessage :: ErrorMessage -> Builder
+buildErrorMessage msg = case msg of
+    UnboundVariable          ->
+            "Error: Unbound variable\n"
+    InvalidInputType expr    ->
+            "Error: Invalid input type\n"
+        <>  "\n"
+        <>  "Type: " <> buildExpr expr <> "\n"
+    InvalidOutputType expr   ->
+            "Error: Invalid output type\n"
+        <>  "\n"
+        <>  "Type: " <> buildExpr expr <> "\n"
+    NotAFunction             ->
+            "Error: Only functions may be applied to values\n"
+    TypeMismatch expr1 expr2 ->
+            "Error: Function applied to argument of the wrong type\n"
+        <>  "\n"
+        <>  "Expected type: " <> buildExpr expr1 <> "\n"
+        <>  "Argument type: " <> buildExpr expr2 <> "\n"
+    Untyped c                ->
+            "Error: " <> buildConst c <> " has no type\n"
+
+-- | A structured type error
+data TypeError = TypeError
+    { context :: Context
+    , current :: Expr
+    , message :: ErrorMessage
+    } deriving (Show, Typeable)
+
+instance Exception TypeError
+
+buildTypeError :: TypeError -> Builder
+buildTypeError (TypeError ctx expr msg)
+    =   (    if Text.null (toLazyText ppCtx)
+             then mempty
+             else "Context:\n" <> ppCtx <> "\n"
+        )
+    <>  "Expression: " <> buildExpr expr <> "\n"
+    <>  "\n"
+    <>  buildErrorMessage msg
+  where
+    ppCtx = ppContext ctx
+
+-- | Render a type exception as pretty-printed `Text`
+explain :: TypeError -> Text
+explain = toLazyText . buildTypeError
+
 freeOf :: Text -> Expr -> IntSet
 freeOf txt = go
   where
@@ -251,13 +313,11 @@ subst x0 e0 = go
                     in  c x' (go _A) (go (subst x (Var x') b))
                 else c x (go _A) (go b)
 
-typeOf_ :: Context -> Expr -> Either Text Expr
+typeOf_ :: Context -> Expr -> Either TypeError Expr
 typeOf_ ctx e = case e of
     Const c  -> fmap Const (axiom c)
     Var x    -> case lookup x ctx of
-        Nothing -> Left (toLazyText (
-                header
-            <>  "Error: Unbound variable\n" ) )
+        Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b -> do
         _B <- typeOf_ ((x, _A):ctx) b
@@ -268,49 +328,24 @@ typeOf_ ctx e = case e of
         eS <- fmap whnf (typeOf_ ctx _A)
         s  <- case eS of
             Const s -> return s
-            _       -> Left (toLazyText (
-                    header
-                <>  "Error: The variable bound by the ∀ has an invalid type\n"
-                <>  "\n"
-                <>  "Value: " <> buildExpr _A <> "\n"
-                <>  "Actual type: " <> buildExpr eS <> "\n"
-                <>  "Valid types: " <> buildConsts  <> "\n" ) )
-        eT <- fmap whnf (typeOf_ ((x, _A):ctx) _B)
+            _       -> Left (TypeError ctx e (InvalidInputType _A))
+        let ctx' = (x, _A):ctx
+        eT <- fmap whnf (typeOf_ ctx' _B)
         t  <- case eT of
             Const t -> return t
-            _       -> Left (toLazyText (
-                    header
-                <>  "Error: The value returned by the ∀ has an invalid type\n"
-                <>  "\n"
-                <>  "Actual type: " <> buildExpr eT <> "\n"
-                <>  "Valid types: " <> buildConsts  <> "\n" ) )
+            _       -> Left (TypeError ctx' e (InvalidOutputType _B))
         fmap Const (rule s t)
     App f a  -> do
         e' <- fmap whnf (typeOf_ ctx f)
         (x, _A, _B) <- case e' of
             Pi x _A _B -> return (x, _A, _B)
-            _          -> Left (toLazyText (
-                    header
-                <>  "Error: Only functions may be applied to values\n" ) )
+            _          -> Left (TypeError ctx e NotAFunction)
         _A' <- typeOf_ ctx a
         let nf_A  = normalize _A 
             nf_A' = normalize _A'
         if nf_A == nf_A'
             then return (subst x a _B)
-            else Left (toLazyText (
-                    header
-                <>  "Error: Function applied to argument of the wrong type\n"
-                <>  "\n"
-                <>  "Expected type: " <> buildExpr nf_A  <> "\n"
-                <>  "Argument type: " <> buildExpr nf_A' <> "\n" ) )
-  where
-    ppCtx = ppContext ctx
-    header =
-            (if Text.null (toLazyText ppCtx)
-             then mempty
-             else "Context:\n" <> ppContext ctx <> "\n")
-        <>  "Expression: " <> buildExpr e <> "\n"
-        <>  "\n"
+            else Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
@@ -320,7 +355,7 @@ typeOf_ ctx e = case e of
 
     `typeOf` does not necessarily normalize the type.
 -}
-typeOf :: Expr -> Either Text Expr
+typeOf :: Expr -> Either TypeError Expr
 typeOf = typeOf_ []
 
 whnf :: Expr -> Expr
@@ -376,5 +411,5 @@ printValue = Text.putStrLn . pretty
 -}
 printType :: Expr -> IO ()
 printType expr = case typeOf expr of
-    Left err -> Text.putStr err
+    Left err -> Text.putStr (explain err)
     Right t  -> Text.putStrLn (pretty t)
