@@ -44,12 +44,16 @@ module Morte (
     TypeMessage(..),
     TypeError(..),
 
-    -- * Core operations
+    -- * Core functions
     typeOf,
     normalize,
 
-    -- * Utilities
+    -- * Conversions
+    -- $conversions
     parse,
+    buildExpr,
+
+    -- * Utilities
     pretty,
     explain,
     printValue,
@@ -59,24 +63,27 @@ module Morte (
 import Control.Applicative (pure, (<$>), (<*>), (*>), (<*), (<|>))
 import Control.Exception (Exception)
 import Control.Monad (void)
-import Control.Monad.Trans.State (State, evalState, get, modify)
+import Control.Monad.Trans.State (State, evalState, modify)
+import qualified Control.Monad.Trans.State as State
 import qualified Data.Attoparsec.Text.Lazy as A
 import Data.Attoparsec.Text.Lazy (Parser)
+import Data.Binary (Binary(get, put), Get)
 import Data.Char (isSpace)
-import Data.Monoid (mempty, (<>))
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
 import Data.Text ()  -- For the `IsString` instance
 import Data.Text.Lazy (Text)
+import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
+import Data.Word (Word8)
 
 -- TODO: Include example use cases in module header
--- TODO: Add `Binary` instance
 -- TODO: Document all functions
 
 {-| Label for a bound variable
@@ -88,6 +95,16 @@ import Data.Typeable (Typeable)
     pretty-printing the `Var`.
 -}
 data Var = V Text Int deriving (Eq, Show)
+
+instance Binary Var where
+    put (V txt n) = do
+        put (Text.encodeUtf8 (Text.toStrict txt))
+        put n
+    get = do
+        bs <- get
+        case Text.decodeUtf8' bs of
+            Left  e   -> fail (show e)
+            Right txt -> V (Text.fromStrict txt) <$> get
 
 instance IsString Var
   where
@@ -108,6 +125,17 @@ instance IsString Var
 
 -}
 data Const = Star | Box deriving (Eq, Show, Bounded, Enum)
+
+instance Binary Const where
+    put c = case c of
+        Star -> put (0 :: Word8)
+        Box  -> put (1 :: Word8)
+    get = do
+        n <- get :: Get Word8
+        case n of
+            0 -> return Star
+            1 -> return Box
+            _ -> fail "get Const: Invalid tag byte"
 
 axiom :: Const -> Either TypeError Const
 axiom Star = return Box
@@ -141,7 +169,7 @@ instance Eq Expr where
         go :: Expr -> Expr -> State [(Var, Var)] Bool
         go (Const cL) (Const cR) = return (cL == cR)
         go (Var xL) (Var xR) = do
-            ctx <- get
+            ctx <- State.get
             let x = case lookup xL ctx of
                     Nothing  -> xL
                     Just xR' -> xR'
@@ -161,6 +189,39 @@ instance Eq Expr where
             b2 <- go aL aR
             return (b1 && b2)
         go _ _ = return False
+
+instance Binary Expr where
+    put e = case e of
+        Const c    -> do
+            put (0 :: Word8)
+            put c
+        Var x      -> do
+            put (1 :: Word8)
+            put x
+        Lam x _A b -> do
+            put (2 :: Word8)
+            put x
+            put _A
+            put b
+        Pi  x _A _B -> do
+            put (3 :: Word8)
+            put x
+            put _A
+            put _B
+        App f a     -> do
+            put (4 :: Word8)
+            put f
+            put a
+
+    get = do
+        n <- get :: Get Word8
+        case n of
+            0 -> Const <$> get
+            1 -> Var <$> get
+            2 -> Lam <$> get <*> get <*> get
+            3 -> Pi  <$> get <*> get <*> get
+            4 -> App <$> get <*> get
+            _ -> fail "get Expr: Invalid tag byte"
 
 instance IsString Expr
   where
@@ -196,6 +257,7 @@ buildConst c = case c of
 buildVar :: Var -> Builder
 buildVar (V txt n) = fromLazyText txt <> if n == 0 then mempty else decimal n
 
+-- | Render a pretty-printed expression as a `Builder`
 buildExpr :: Expr -> Builder
 buildExpr = go False False
   where
@@ -273,14 +335,6 @@ buildTypeError (TypeError ctx expr msg)
     buildContext =
         (fromLazyText . Text.unlines . map (toLazyText . buildKV) . reverse) ctx
 
-
--- | Render an expression as pretty-printed `Text`
-pretty :: Expr -> Text
-pretty = toLazyText . buildExpr
-
--- | Render a type error as pretty-printed `Text`
-explain :: TypeError -> Text
-explain = toLazyText . buildTypeError
 
 -- | Find all free variables with a given label and return their numeric suffixes
 freeOf :: Text -> Expr -> IntSet
@@ -403,24 +457,13 @@ normalize e = case e of
     Var   _    -> e
     Const _    -> e
 
-{-| Convenience function to pretty-print an expression to the console
-
-    `printValue` does not type-check or normalize the expression.
+{- $conversions
+    `parse` and `pretty` convert expressions to and from lazy `Text`.  You can
+    also use the `Binary` instance of `Expr` to serialize to and deserialize from
+    `ByteString`s.
 -}
-printValue :: Expr -> IO ()
-printValue = Text.putStrLn . pretty
 
-{-| Convenience function to pretty print an expression's type, or output an error
-    message if type checking fails
-
-    `printType` does not necessarily normalize the type.
--}
-printType :: Expr -> IO ()
-printType expr = case typeOf expr of
-    Left err -> Text.putStr (explain err)
-    Right t  -> Text.putStrLn (pretty t)
-
--- | Parser for a single expression
+-- | Parse a single expression from `Text`
 parse :: Parser Expr
 parse = A.skipSpace *> parseExpr <* A.skipSpace
 
@@ -503,3 +546,28 @@ parseConst =
     <$> (    A.string "*" *> pure Star
         <|> (void (A.string "BOX") <|> void (A.char '□')) *> pure Box
         )
+
+-- | Render a pretty-printed expression as `Text`
+pretty :: Expr -> Text
+pretty = toLazyText . buildExpr
+
+-- | Render a type error as `Text`
+explain :: TypeError -> Text
+explain = toLazyText . buildTypeError
+
+{-| Convenience function to pretty-print an expression to the console
+
+    `printValue` does not type-check or normalize the expression.
+-}
+printValue :: Expr -> IO ()
+printValue = Text.putStrLn . pretty
+
+{-| Convenience function to pretty print an expression's type, or output an error
+    message if type checking fails
+
+    `printType` does not necessarily normalize the type.
+-}
+printType :: Expr -> IO ()
+printType expr = case typeOf expr of
+    Left err -> Text.putStr (explain err)
+    Right t  -> Text.putStrLn (pretty t)
