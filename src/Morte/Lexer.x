@@ -8,7 +8,7 @@ module Morte.Lexer (
     lexExpr
     ) where
 
-import Data.Text (Text, pack, unpack)
+import Data.Text.Lazy (Text, pack, unpack)
 
 }
 
