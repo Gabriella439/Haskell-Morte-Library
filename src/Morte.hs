@@ -50,7 +50,7 @@ module Morte (
 
     -- * Conversions
     -- $conversions
-    parse,
+    parseExpr,
     buildExpr,
 
     -- * Utilities
@@ -464,11 +464,11 @@ normalize e = case e of
 -}
 
 -- | Parse a single expression from `Text`
-parse :: Parser Expr
-parse = A.skipSpace *> parseExpr <* A.skipSpace
-
 parseExpr :: Parser Expr
-parseExpr = parseLam <|> parsePi <|> parseBExpr
+parseExpr = A.skipSpace *> parseExpr_ <* A.skipSpace
+
+parseExpr_ :: Parser Expr
+parseExpr_ = parseLam <|> parsePi <|> parseBExpr
 
 parsePi :: Parser Expr
 parsePi = parseBind Pi skipPi <|> parsePiSimple
@@ -478,7 +478,7 @@ parsePiSimple =
         Pi "_"
     <$> (parseBExpr <* A.skipSpace)
     <*> (   (skipArrow  <* A.skipSpace)
-        *>   parseExpr
+        *>   parseExpr_
         )
 
 parseLam :: Parser Expr
@@ -492,11 +492,11 @@ parseBind c symbol =
         *>  (parseVar   <* A.skipSpace)
         )
     <*> (   (A.char ':' <* A.skipSpace)
-        *>  (parseExpr  <* A.skipSpace)
+        *>  (parseExpr_  <* A.skipSpace)
         )
     <*> (   (A.char ')' <* A.skipSpace)
         *>  (skipArrow  <* A.skipSpace)
-        *>   parseExpr
+        *>   parseExpr_
         )
 
 skipLambda :: Parser ()
@@ -520,11 +520,11 @@ skipArrow =
     <|> void (A.string "->")
 
 parseBExpr :: Parser Expr
-parseBExpr = foldr1 App <$> A.sepBy1 parseAExpr (A.space *> A.skipSpace)
+parseBExpr = foldl1 App <$> A.sepBy1 parseAExpr (A.space *> A.skipSpace)
 
 parseAExpr :: Parser Expr
 parseAExpr =
-        A.char '(' *> A.skipSpace *> parseExpr <* A.char ')'
+        A.char '(' *> A.skipSpace *> parseExpr_ <* A.char ')'
     <|> parseConst
     <|> Var <$> parseVar
 
