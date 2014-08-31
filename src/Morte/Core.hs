@@ -33,7 +33,7 @@
 
 -}
 
-module Morte (
+module Morte.Core (
     -- * Syntax
     Var(..),
     Const(..),
@@ -85,6 +85,7 @@ import Data.Word (Word8)
 
 -- TODO: Include example use cases in module header
 -- TODO: Document all functions
+-- TODO: Structure lexing/parsing error messages
 
 {-| Label for a bound variable
 
