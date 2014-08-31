@@ -6,17 +6,13 @@ module Morte.Lexer (
     -- * Lexer
     Token(..),
     Position(..),
-    LexError(..),
     lexExpr
     ) where
 
 import Control.Monad.Trans.State.Strict (State, get, put)
 import Data.Bits (shiftR, (.&.))
 import Data.Char (ord, digitToInt)
-import Data.Monoid (mempty, (<>))
 import Data.Text.Lazy (Text)
-import qualified Data.Text.Lazy.Builder as Builder
-import Data.Text.Lazy.Builder.Int (decimal)
 import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
 import Pipes (Producer, lift, yield)
@@ -24,7 +20,7 @@ import Pipes (Producer, lift, yield)
 }
 
 $digit = 0-9
-$reserved = [\(\)\-\\:→]
+$reserved = [\(\)\-\\\@:→]
 $labelchar = $printable # $reserved # $white
 $whiteline = $white # \n
 
@@ -95,16 +91,15 @@ alexGetByte (AlexInput c bytes text) = case bytes of
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar = prevChar
 
--- | Convert a text representation of an expression into a stream of tokens
-lexExpr :: Text -> Producer Token (State Position) (Maybe LexError)
+{-| Convert a text representation of an expression into a stream of tokens,
+    returning the remainder of the input on a lexing failure
+-}
+lexExpr :: Text -> Producer Token (State Position) (Maybe Text)
 lexExpr text = go (AlexInput '\n' [] text)
   where
     go input = case alexScan input 0 of
         AlexEOF                       -> return Nothing
-        AlexError (AlexInput t _ ext) -> do
-            P l c <- lift get
-            let text = Text.cons t ext
-            return (Just (LexError l c text))
+        AlexError (AlexInput t _ ext) -> return (Just (Text.cons t ext))
         AlexSkip  input' len     -> do
             lift (do
                 P l c <- get
@@ -132,23 +127,4 @@ data Token
     | Number Int
     | EOF
     deriving (Show)
-
--- | Structured type for lexical errors
-data LexError = LexError
-    { line      :: Int
-    , column    :: Int
-    , remainder :: Text
-    } deriving (Show)
-
--- | Pretty-print a lexical error
-prettyLexError :: LexError -> Text
-prettyLexError (LexError l c r) = Builder.toLazyText (
-        "Line:   " <> decimal l <> "\n"
-    <>  "Column: " <> decimal c <> "\n"
-    <>  "\n"
-    <>  "Remainder: " <> Builder.fromLazyText (Text.take 66 r) <> dots <> "\n"
-    <>  "\n"
-    <>  "Error: Lexing failed\n" )
-  where
-    dots = if Text.length r > 66 then "..." else mempty
 }

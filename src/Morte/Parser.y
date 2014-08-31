@@ -5,14 +5,19 @@ module Morte.Parser (
     parseExpr
     ) where
 
-import Control.Monad.Trans.State.Strict (State, StateT, get, put, evalStateT)
-import Data.Text.Lazy (Text)
 import Control.Monad.Morph (generalize)
+import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
+import Control.Monad.Trans.State.Strict (State, StateT, get, put, runState)
+import Data.Monoid (mempty, (<>))
+import Data.Text.Lazy (Text)
+import qualified Data.Text.Lazy as Text
+import qualified Data.Text.Lazy.Builder as Builder
+import Data.Text.Lazy.Builder.Int (decimal)
 import Lens.Family.Stock (_1, _2)
 import Lens.Family.State.Strict (zoom)
 import Morte.Core (Var(..), Const(..), Expr(..))
 import qualified Morte.Lexer as Lexer
-import Morte.Lexer (Token, Position, LexError)
+import Morte.Lexer (Token, Position)
 import Pipes (Producer, hoist, lift, next)
 
 }
@@ -54,30 +59,58 @@ AExpr : VExpr                                   { Var $1       }
       | 'BOX'                                   { Const Box    }
 
 {
-data ParseError
-    = LexError Lexer.LexError
-    | ParseError Lexer.Token
-    deriving (Show)
+data ParseMessage = Lexing Text | Parsing Lexer.Token deriving (Show)
 
-type Status = (Position, Producer Token (State Position) (Maybe LexError))
+instance Error ParseMessage where
 
-type Lex = StateT Status (Either ParseError)
+type Status = (Position, Producer Token (State Position) (Maybe Text))
+
+type Lex = ErrorT ParseMessage (State Status)
 
 lexer :: (Token -> Lex a) -> Lex a
 lexer k = do
-    p <- zoom _2 get
-    x <- hoist generalize (zoom _1 (next p))
+    p <- lift (zoom _2 get)
+    x <- lift (hoist generalize (zoom _1 (next p)))
     case x of
         Left ml           -> case ml of
             Nothing -> k Lexer.EOF
-            Just le -> lift (Left (LexError le))
+            Just le -> throwError (Lexing le)
         Right (token, p') -> do
-            zoom _2 (put p')
+            lift (zoom _2 (put p'))
             k token
 
 parseError :: Token -> Lex a
-parseError token = lift (Left (ParseError token))
+parseError token = throwError (Parsing token)
 
 exprFromText :: Text -> Either ParseError Expr
-exprFromText text = evalStateT parseExpr (Lexer.P 0 0, Lexer.lexExpr text)
+exprFromText text = case runState (runErrorT parseExpr) initialStatus of
+    (x, (p, _)) -> case x of
+        Left  e    -> Left (ParseError p e)
+        Right expr -> Right expr
+  where
+    initialStatus = (Lexer.P 0 0, Lexer.lexExpr text)
+
+-- | Structured type for parsing errors
+data ParseError = ParseError
+    { position :: Position
+    , message :: ParseMessage
+    } deriving (Show)
+
+-- | Pretty-print a lexical error
+prettyLexError :: ParseError -> Text
+prettyLexError (ParseError (Lexer.P l c) e) = Builder.toLazyText (
+        "Line:   " <> decimal l <> "\n"
+    <>  "Column: " <> decimal c <> "\n"
+    <>  "\n"
+    <>  case e of
+        Lexing r  ->
+                "Lexing: " <> Builder.fromLazyText (Text.take 66 r) <> dots <> "\n"
+            <>  "\n"
+            <>  "Error: Lexing failed\n"
+          where
+            dots = if Text.length r > 66 then "..." else mempty
+        Parsing t ->
+                "Parsing: " <> Builder.fromString (show t) <> "\n"
+            <>  "\n"
+            <>  "Error: Parsing failed\n" )
 }
