@@ -3,11 +3,12 @@
     I can't get the `ByteString` interface to correctly lex unicode symbols.
 -}
 module Morte.Lexer (
+    -- * Lexer
+    Token(..),
     lexExpr
     ) where
 
 import Data.Text (Text, pack, unpack)
-import Morte.Token (Token(..))
 
 }
 
@@ -34,6 +35,21 @@ tokens :-
     $labelchar+                         { \bs -> Label (pack bs)  }
 
 {
+-- | Token type, used to communicate between the lexer and parser
+data Token
+    = OpenParen
+    | CloseParen
+    | Colon
+    | At
+    | Star
+    | Box
+    | Arrow
+    | Lambda
+    | Pi
+    | Label Text
+    | Number Int
+    deriving (Show)
+
 -- | Convert a text representation of an expression into a stream of tokens
 lexExpr :: Text -> [Token]
 lexExpr = alexScanTokens . unpack

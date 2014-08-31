@@ -4,7 +4,7 @@ module Morte.Parser (
     ) where
 
 import Data.Text (Text)
-import Morte.Token (Token(..))
+import Morte.Lexer (Token(..))
 }
 
 %name parseExpr
