@@ -27,7 +27,7 @@ $whiteline = $white # \n
 tokens :-
 
     $whiteline+                         ;
-    "\n"                                { \_    -> lift (do
+    \n                                  { \_    -> lift (do
                                             P l c <- get
                                             put (P (l + 1) 0) )                }
     "--".*                              ;
@@ -98,18 +98,18 @@ lexExpr :: Text -> Producer Token (State Position) (Maybe Text)
 lexExpr text = go (AlexInput '\n' [] text)
   where
     go input = case alexScan input 0 of
-        AlexEOF                       -> return Nothing
-        AlexError (AlexInput t _ ext) -> return (Just (Text.cons t ext))
-        AlexSkip  input' len     -> do
+        AlexEOF                        -> return Nothing
+        AlexError (AlexInput _ _ text) -> return (Just text)
+        AlexSkip  input' len           -> do
             lift (do
                 P l c <- get
                 put (P l (c + len)) )
             go input'
-        AlexToken input' len act -> do
+        AlexToken input' len act       -> do
+            act (Text.take (fromIntegral len) (currInput input))
             lift (do
                 P l c <- get
                 put (P l (c + len)) )
-            act (Text.take (fromIntegral len) (currInput input))
             go input'
 
 -- | Token type, used to communicate between the lexer and parser
