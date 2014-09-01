@@ -39,7 +39,7 @@ tokens :-
     "*"                                 { \_    -> yield Star                  }
     "BOX" | "□"                         { \_    -> yield Box                   }
     "->" | "→"                          { \_    -> yield Arrow                 }
-    "\" | "λ" | "Λ"                     { \_    -> yield Lambda                }
+    "\" | "λ"                           { \_    -> yield Lambda                }
     "forall" | "|~|" | "\/' | "∀" | "Π" { \_    -> yield Pi                    }
     $digit+                             { \text -> yield (Number (toInt text)) }
     $labelchar+                         { \text -> yield (Label text)          }
