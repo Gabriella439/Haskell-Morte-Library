@@ -21,13 +21,19 @@ import Pipes (Producer, lift, yield)
 }
 
 $digit = 0-9
-$reserved = [\(\)\-\\\@:→]
-$labelchar = $printable # $reserved # $white
-$whiteline = $white # \n
+
+-- Same as Haskell
+$opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
+
+-- I intentionally disallow `'` or digits in variable labels.
+-- Use the `label@number` syntax to disambiguate variables with the same label
+$labelchar = [A-Za-z_]
+
+$whiteNoNewline = $white # \n
 
 tokens :-
 
-    $whiteline+                         ;
+    $whiteNoNewline+                    ;
     \n                                  { \_    -> lift (do
                                             line   += 1
                                             column .= 0 )                      }
@@ -42,7 +48,7 @@ tokens :-
     "\" | "λ"                           { \_    -> yield Lambda                }
     "forall" | "|~|" | "\/' | "∀" | "Π" { \_    -> yield Pi                    }
     $digit+                             { \text -> yield (Number (toInt text)) }
-    $labelchar+                         { \text -> yield (Label text)          }
+    $labelchar+ | "(" $opchar+ ")"      { \text -> yield (Label text)          }
 
 {
 toInt :: Text -> Int
@@ -83,7 +89,7 @@ line k (P l c) = fmap (\l' -> P l' c) (k l)
 
 -- column :: Lens' Position Int
 column :: Functor f => (Int -> f Int) -> Position -> f Position
-column k (P l c) = fmap (\l' -> P l' c) (k l)
+column k (P l c) = fmap (\c' -> P l c') (k c)
 
 {- @alex@ does not provide a `Text` wrapper, so the following code just modifies
    the code from their @basic@ wrapper to work with `Text`
