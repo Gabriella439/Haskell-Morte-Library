@@ -51,18 +51,22 @@ import Pipes (Producer, hoist, lift, next)
 
 %%
 
-Expr : BExpr                                   { $1           }
+Expr :: { Expr }
+     : BExpr                                   { $1           }
      | '\\'  '(' VExpr ':' Expr ')' '->' Expr  { Lam $3 $5 $8 }
      | '|~|' '(' VExpr ':' Expr ')' '->' Expr  { Pi  $3 $5 $8 }
      | BExpr '->' Expr                         { Pi "_" $1 $3 }
 
-VExpr : label '@' number                       { V $1 $3      }
+VExpr :: { Var }
+      : label '@' number                       { V $1 $3      }
       | label                                  { V $1 0       }
 
-BExpr : BExpr AExpr                            { App $1 $2    }
+BExpr :: { Expr }
+      :  BExpr AExpr                            { App $1 $2    }
       | AExpr                                  { $1           }
 
-AExpr : VExpr                                  { Var $1       }
+AExpr :: { Expr }
+      : VExpr                                  { Var $1       }
       | '*'                                    { Const Star   }
       | 'BOX'                                  { Const Box    }
       | '(' Expr ')'                           { $2           }

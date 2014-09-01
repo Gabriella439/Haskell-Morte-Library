@@ -1,16 +1,10 @@
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -Wall #-}
 
-{-| Morte is a typed, purely functional, and strongly normalizing term rewriting
-    system designed as an intermediate language for compilers.  Use this library
-    to type-check, normalize, parse, pretty-print, serialize and deserialize
-    expressions in this intermediate language.
-
-
-    This module contains the core calculus for the Morte language.  This language
+{-| This module contains the core calculus for the Morte language.  This language
     is a minimalist implementation of the calculus of constructions, which is in
     turn a specific kind of pure type system.  If you are new to pure type
-    systems you may wish to read:
+    systems you may wish to read the paper this library is heavily based upon:
     <http://research.microsoft.com/en-us/um/people/simonpj/papers/henk.ps.gz Henk: a typed intermediate language>.
 
 
@@ -40,20 +34,20 @@ module Morte.Core (
     Const(..),
     Expr(..),
 
-    -- * Errors
-    Context,
-    TypeMessage(..),
-    TypeError(..),
-
     -- * Core functions
     typeOf,
     normalize,
 
     -- * Utilities
     prettyExpr,
-    prettyTypeError,
-    printValue,
+    printExpr,
     printType,
+
+    -- * Errors
+    prettyTypeError,
+    TypeError(..),
+    Context,
+    TypeMessage(..)
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -77,7 +71,6 @@ import Data.Word (Word8)
 
 -- TODO: Include example use cases in module header
 -- TODO: Document all functions
--- TODO: Structure lexing/parsing error messages
 
 {-| Label for a bound variable
 
@@ -460,10 +453,10 @@ prettyTypeError = toLazyText . buildTypeError
 
 {-| Convenience function to pretty-print an expression to the console
 
-    `printValue` does not type-check or normalize the expression.
+    `printExpr` does not type-check or normalize the expression.
 -}
-printValue :: Expr -> IO ()
-printValue = Text.putStrLn . prettyExpr
+printExpr :: Expr -> IO ()
+printExpr = Text.putStrLn . prettyExpr
 
 {-| Convenience function to pretty print an expression's type, or output an error
     message if type checking fails
