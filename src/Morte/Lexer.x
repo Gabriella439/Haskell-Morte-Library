@@ -108,7 +108,7 @@ alexGetByte (AlexInput c bytes text) = case bytes of
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar = prevChar
 
-{-| Convert a text representation of an expression into a stream of token
+{-| Convert a text representation of an expression into a stream of tokens
 
     `lexExpr` keeps track of position and returns the remainder of the input if
     lexing fils

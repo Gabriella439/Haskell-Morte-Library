@@ -5,10 +5,12 @@
 
 module Morte.Parser (
     -- * Parser
-    ParseMessage(..),
-    ParseError(..),
     exprFromText,
-    prettyParseError
+
+    -- * Errors
+    prettyParseError,
+    ParseError(..),
+    ParseMessage(..)
     ) where
 
 import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)

@@ -50,8 +50,8 @@ module Morte.Core (
     normalize,
 
     -- * Utilities
-    pretty,
-    explain,
+    prettyExpr,
+    prettyTypeError,
     printValue,
     printType,
     ) where
@@ -451,19 +451,19 @@ normalize e = case e of
     Const _    -> e
 
 -- | Render a pretty-printed expression as `Text`
-pretty :: Expr -> Text
-pretty = toLazyText . buildExpr
+prettyExpr :: Expr -> Text
+prettyExpr = toLazyText . buildExpr
 
 -- | Render a type error as `Text`
-explain :: TypeError -> Text
-explain = toLazyText . buildTypeError
+prettyTypeError :: TypeError -> Text
+prettyTypeError = toLazyText . buildTypeError
 
 {-| Convenience function to pretty-print an expression to the console
 
     `printValue` does not type-check or normalize the expression.
 -}
 printValue :: Expr -> IO ()
-printValue = Text.putStrLn . pretty
+printValue = Text.putStrLn . prettyExpr
 
 {-| Convenience function to pretty print an expression's type, or output an error
     message if type checking fails
@@ -472,5 +472,5 @@ printValue = Text.putStrLn . pretty
 -}
 printType :: Expr -> IO ()
 printType expr = case typeOf expr of
-    Left err -> Text.putStr (explain err)
-    Right t  -> Text.putStrLn (pretty t)
+    Left err -> Text.putStr (prettyTypeError err)
+    Right t  -> Text.putStrLn (prettyExpr t)
