@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
+{-# OPTIONS_GHC -Wall #-}
 
 {-| Morte is a typed, purely functional, and strongly normalizing term rewriting
     system designed as an intermediate language for compilers.  Use this library

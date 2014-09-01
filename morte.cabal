@@ -31,4 +31,4 @@ Library
         Morte.Lexer,
         Morte.Parser
     Build-Tools: alex, happy
-    GHC-Options: -O2 -Wall
+    GHC-Options: -O2
