@@ -1,7 +1,7 @@
 {
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Lexer logic for the Morte language
+-- | Lexing logic for the Morte language
 module Morte.Lexer (
     -- * Lexer
     Token(..),
@@ -71,6 +71,7 @@ encode c = (fromIntegral h, map fromIntegral t)
                 ]
             )
 
+-- | The cursor's location while lexing the file
 data Position = P
     { lineNo    :: {-# UNPACK #-} !Int
     , columnNo  :: {-# UNPACK #-} !Int

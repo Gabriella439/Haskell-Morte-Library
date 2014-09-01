@@ -27,9 +27,8 @@ Library
         text             >= 0.11.1.0 && < 1.2 ,
         transformers     >= 0.2.0.0  && < 0.5
     Exposed-Modules:
-        Morte.Core
-    Build-Tools: alex, happy
-    Other-Modules:
+        Morte.Core,
         Morte.Lexer,
         Morte.Parser
+    Build-Tools: alex, happy
     GHC-Options: -O2 -Wall

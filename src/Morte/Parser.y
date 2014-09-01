@@ -1,8 +1,14 @@
 {
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | Parsing logic for the Morte language
+
 module Morte.Parser (
-    parseExpr
+    -- * Parser
+    ParseMessage(..),
+    ParseError(..),
+    exprFromText,
+    prettyParseError
     ) where
 
 import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
@@ -60,6 +66,7 @@ AExpr : VExpr                                  { Var $1       }
       | '(' Expr ')'                           { $2           }
 
 {
+-- | The specific parsing error
 data ParseMessage = Lexing Text | Parsing Lexer.Token deriving (Show)
 
 {- This is purely to satisfy the unnecessary `Error` constraint for `ErrorT`
@@ -93,6 +100,7 @@ lexer k = do
 parseError :: Token -> Lex a
 parseError token = throwError (Parsing token)
 
+-- | Parse an expression from `Text` or return a `ParseError` if parsing fails
 exprFromText :: Text -> Either ParseError Expr
 exprFromText text = case runState (runErrorT parseExpr) initialStatus of
     (x, (position, _)) -> case x of
@@ -107,9 +115,9 @@ data ParseError = ParseError
     , message :: ParseMessage
     } deriving (Show)
 
--- | Pretty-print a lexical error
-prettyLexError :: ParseError -> Text
-prettyLexError (ParseError (Lexer.P l c) e) = Builder.toLazyText (
+-- | Pretty-print a parsing error
+prettyParseError :: ParseError -> Text
+prettyParseError (ParseError (Lexer.P l c) e) = Builder.toLazyText (
         "Line:   " <> decimal l <> "\n"
     <>  "Column: " <> decimal c <> "\n"
     <>  "\n"
