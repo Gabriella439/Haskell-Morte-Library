@@ -18,11 +18,18 @@ Source-Repository head
 Library
     Hs-Source-Dirs: src
     Build-Depends:
-        base         >= 4        && < 5   ,
-        attoparsec   >= 0.10.0.3 && < 0.13,
-        binary                      < 0.8 ,
-        containers                  < 0.6 ,
-        text         >= 0.11.1.0 && < 1.2 ,
-        transformers >= 0.2.0.0  && < 0.5
-    Exposed-Modules: Morte
+        base             >= 4        && < 5   ,
+        array            >= 0.5.0.0  && < 0.6 ,
+        binary                          < 0.8 ,
+        containers                      < 0.6 ,
+        lens-family-core >= 1.0.0    && < 1.2 ,
+        pipes            >= 4.0.0    && < 4.2 ,
+        text             >= 0.11.1.0 && < 1.2 ,
+        transformers     >= 0.2.0.0  && < 0.5
+    Exposed-Modules:
+        Morte.Core
+    Build-Tools: alex, happy
+    Other-Modules:
+        Morte.Lexer,
+        Morte.Parser
     GHC-Options: -O2 -Wall

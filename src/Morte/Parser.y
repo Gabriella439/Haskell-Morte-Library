@@ -5,16 +5,16 @@ module Morte.Parser (
     parseExpr
     ) where
 
-import Control.Monad.Morph (generalize)
 import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
-import Control.Monad.Trans.State.Strict (State, StateT, get, put, runState)
+import Control.Monad.Trans.State.Strict (State, runState)
+import Data.Functor.Identity (Identity, runIdentity)
 import Data.Monoid (mempty, (<>))
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lazy.Builder.Int (decimal)
 import Lens.Family.Stock (_1, _2)
-import Lens.Family.State.Strict (zoom)
+import Lens.Family.State.Strict ((.=), use, zoom)
 import Morte.Core (Var(..), Const(..), Expr(..))
 import qualified Morte.Lexer as Lexer
 import Morte.Lexer (Token, Position)
@@ -62,22 +62,32 @@ AExpr : VExpr                                  { Var $1       }
 {
 data ParseMessage = Lexing Text | Parsing Lexer.Token deriving (Show)
 
+{- This is purely to satisfy the unnecessary `Error` constraint for `ErrorT`
+
+    I will switch to `ExceptT` when the Haskell Platform incorporates
+    `transformers-0.4.*`.
+-}
 instance Error ParseMessage where
 
 type Status = (Position, Producer Token (State Position) (Maybe Text))
 
 type Lex = ErrorT ParseMessage (State Status)
 
+-- To avoid an explicit @mmorph@ dependency
+generalize :: Monad m => Identity a -> m a
+generalize = return . runIdentity
+
 lexer :: (Token -> Lex a) -> Lex a
 lexer k = do
-    p <- lift (zoom _2 get)
-    x <- lift (hoist generalize (zoom _1 (next p)))
+    x <- lift (do
+        p <- use _2
+        hoist generalize (zoom _1 (next p)) )
     case x of
         Left ml           -> case ml of
             Nothing -> k Lexer.EOF
             Just le -> throwError (Lexing le)
         Right (token, p') -> do
-            lift (zoom _2 (put p'))
+            lift (_2 .= p')
             k token
 
 parseError :: Token -> Lex a
@@ -85,8 +95,8 @@ parseError token = throwError (Parsing token)
 
 exprFromText :: Text -> Either ParseError Expr
 exprFromText text = case runState (runErrorT parseExpr) initialStatus of
-    (x, (p, _)) -> case x of
-        Left  e    -> Left (ParseError p e)
+    (x, (position, _)) -> case x of
+        Left  e    -> Left (ParseError position e)
         Right expr -> Right expr
   where
     initialStatus = (Lexer.P 0 0, Lexer.lexExpr text)
@@ -105,11 +115,12 @@ prettyLexError (ParseError (Lexer.P l c) e) = Builder.toLazyText (
     <>  "\n"
     <>  case e of
         Lexing r  ->
-                "Lexing: " <> Builder.fromLazyText (Text.take 66 r) <> dots <> "\n"
+                "Lexing: " <> remainder <> dots <> "\n"
             <>  "\n"
             <>  "Error: Lexing failed\n"
           where
-            dots = if Text.length r > 66 then "..." else mempty
+            remainder = Builder.fromLazyText (Text.take 66 r)
+            dots      = if Text.length r > 66 then "..." else mempty
         Parsing t ->
                 "Parsing: " <> Builder.fromString (show t) <> "\n"
             <>  "\n"

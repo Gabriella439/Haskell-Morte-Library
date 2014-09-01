@@ -48,11 +48,6 @@ module Morte.Core (
     typeOf,
     normalize,
 
-    -- * Conversions
-    -- $conversions
-    parseExpr,
-    buildExpr,
-
     -- * Utilities
     pretty,
     explain,
@@ -60,15 +55,11 @@ module Morte.Core (
     printType,
     ) where
 
-import Control.Applicative (pure, (<$>), (<*>), (*>), (<*), (<|>))
+import Control.Applicative ((<$>), (<*>))
 import Control.Exception (Exception)
-import Control.Monad (void)
 import Control.Monad.Trans.State (State, evalState, modify)
 import qualified Control.Monad.Trans.State as State
-import qualified Data.Attoparsec.Text.Lazy as A
-import Data.Attoparsec.Text.Lazy (Parser)
 import Data.Binary (Binary(get, put), Get)
-import Data.Char (isSpace)
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.Monoid (mempty, (<>))
@@ -457,96 +448,6 @@ normalize e = case e of
         f'          -> App f' (normalize _C)
     Var   _    -> e
     Const _    -> e
-
-{- $conversions
-    `parse` and `pretty` convert expressions to and from lazy `Text`.  You can
-    also use the `Binary` instance of `Expr` to serialize to and deserialize from
-    `ByteString`s.
--}
-
--- | Parse a single expression from `Text`
-parseExpr :: Parser Expr
-parseExpr = A.skipSpace *> parseExpr_ <* A.skipSpace
-
-parseExpr_ :: Parser Expr
-parseExpr_ = parseLam <|> parsePi <|> parseBExpr
-
-parsePi :: Parser Expr
-parsePi = parseBind Pi skipPi <|> parsePiSimple
-
-parsePiSimple :: Parser Expr
-parsePiSimple =
-        Pi "_"
-    <$> (parseBExpr <* A.skipSpace)
-    <*> (   (skipArrow  <* A.skipSpace)
-        *>   parseExpr_
-        )
-
-parseLam :: Parser Expr
-parseLam = parseBind Lam skipLambda
-
-parseBind :: (Var -> Expr -> Expr -> Expr) -> Parser () -> Parser Expr
-parseBind c symbol =
-        c
-    <$> (   (symbol     <* A.skipSpace)
-        *>  (A.char '(' <* A.skipSpace)
-        *>  (parseVar   <* A.skipSpace)
-        )
-    <*> (   (A.char ':' <* A.skipSpace)
-        *>  (parseExpr_  <* A.skipSpace)
-        )
-    <*> (   (A.char ')' <* A.skipSpace)
-        *>  (skipArrow  <* A.skipSpace)
-        *>   parseExpr_
-        )
-
-skipLambda :: Parser ()
-skipLambda =
-        void (A.char   'λ'  )
-    <|> void (A.char   'Λ'  )
-    <|> void (A.char   '\\' )
-    <|> void (A.string "/\\")
-
-skipPi :: Parser ()
-skipPi =
-        void (A.char   '∀'      )
-    <|> void (A.char   'Π'      )
-    <|> void (A.string "|~|"    )
-    <|> void (A.string "\\/"    )
-    <|> void (A.string "forall ")
-
-skipArrow :: Parser ()
-skipArrow =
-        void (A.char   '→' )
-    <|> void (A.string "->")
-
-parseBExpr :: Parser Expr
-parseBExpr = foldl1 App <$> A.sepBy1 parseAExpr (A.space *> A.skipSpace)
-
-parseAExpr :: Parser Expr
-parseAExpr =
-        A.char '(' *> A.skipSpace *> parseExpr_ <* A.char ')'
-    <|> parseConst
-    <|> Var <$> parseVar
-
-parseVar :: Parser Var
-parseVar = V <$> txt <*> n
- where
-    p c =   not (isSpace c)
-        &&  c /= '('
-        &&  c /= ')'
-        &&  c /= '@'
-        &&  c /= '-'
-        &&  c /= '→'
-    txt = Text.fromStrict <$> A.takeWhile1 p
-    n   = A.char '@' *> A.decimal <|> pure 0
-
-parseConst :: Parser Expr
-parseConst =
-        Const
-    <$> (    A.string "*" *> pure Star
-        <|> (void (A.string "BOX") <|> void (A.char '□')) *> pure Box
-        )
 
 -- | Render a pretty-printed expression as `Text`
 pretty :: Expr -> Text

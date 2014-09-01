@@ -9,12 +9,13 @@ module Morte.Lexer (
     lexExpr
     ) where
 
-import Control.Monad.Trans.State.Strict (State, get, put)
+import Control.Monad.Trans.State.Strict (State)
 import Data.Bits (shiftR, (.&.))
 import Data.Char (ord, digitToInt)
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
+import Lens.Family.State.Strict ((.=), (+=))
 import Pipes (Producer, lift, yield)
 
 }
@@ -28,8 +29,8 @@ tokens :-
 
     $whiteline+                         ;
     \n                                  { \_    -> lift (do
-                                            P l c <- get
-                                            put (P (l + 1) 0) )                }
+                                            line   += 1
+                                            column .= 0 )                      }
     "--".*                              ;
     "("                                 { \_    -> yield OpenParen             }
     ")"                                 { \_    -> yield CloseParen            }
@@ -47,6 +48,7 @@ tokens :-
 toInt :: Text -> Int
 toInt = Text.foldl' (\x c -> 10 * x + digitToInt c) 0
 
+-- This was lifted almost intact from the @alex@ source code
 encode :: Char -> (Word8, [Word8])
 encode c = (fromIntegral h, map fromIntegral t)
   where
@@ -74,6 +76,20 @@ data Position = P
     , columnNo  :: {-# UNPACK #-} !Int
     } deriving (Show)
 
+-- line :: Lens' Position Int
+line :: Functor f => (Int -> f Int) -> Position -> f Position
+line k (P l c) = fmap (\l' -> P l' c) (k l)
+
+-- column :: Lens' Position Int
+column :: Functor f => (Int -> f Int) -> Position -> f Position
+column k (P l c) = fmap (\l' -> P l' c) (k l)
+
+{- @alex@ does not provide a `Text` wrapper, so the following code just modifies
+   the code from their @basic@ wrapper to work with `Text`
+
+   I could not get the @basic-bytestring@ wrapper to work; it does not correctly
+   recognize Unicode regular expressions.
+-}
 data AlexInput = AlexInput
     { prevChar  :: Char
     , currBytes :: [Word8]
@@ -91,8 +107,10 @@ alexGetByte (AlexInput c bytes text) = case bytes of
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar = prevChar
 
-{-| Convert a text representation of an expression into a stream of tokens,
-    returning the remainder of the input on a lexing failure
+{-| Convert a text representation of an expression into a stream of token
+
+    `lexExpr` keeps track of position and returns the remainder of the input if
+    lexing fils
 -}
 lexExpr :: Text -> Producer Token (State Position) (Maybe Text)
 lexExpr text = go (AlexInput '\n' [] text)
@@ -101,15 +119,11 @@ lexExpr text = go (AlexInput '\n' [] text)
         AlexEOF                        -> return Nothing
         AlexError (AlexInput _ _ text) -> return (Just text)
         AlexSkip  input' len           -> do
-            lift (do
-                P l c <- get
-                put (P l (c + len)) )
+            lift (column += len)
             go input'
         AlexToken input' len act       -> do
             act (Text.take (fromIntegral len) (currInput input))
-            lift (do
-                P l c <- get
-                put (P l (c + len)) )
+            lift (column += len)
             go input'
 
 -- | Token type, used to communicate between the lexer and parser
