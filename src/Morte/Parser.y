@@ -113,7 +113,7 @@ exprFromText text = case runState (runErrorT parseExpr) initialStatus of
         Left  e    -> Left (ParseError position e)
         Right expr -> Right expr
   where
-    initialStatus = (Lexer.P 0 0, Lexer.lexExpr text)
+    initialStatus = (Lexer.P 1 0, Lexer.lexExpr text)
 
 -- | Structured type for parsing errors
 data ParseError = ParseError
@@ -129,12 +129,12 @@ prettyParseError (ParseError (Lexer.P l c) e) = Builder.toLazyText (
     <>  "\n"
     <>  case e of
         Lexing r  ->
-                "Lexing: " <> remainder <> dots <> "\n"
+                "Lexing: \"" <> Builder.fromLazyText remainder <> dots <> "\"\n"
             <>  "\n"
             <>  "Error: Lexing failed\n"
           where
-            remainder = Builder.fromLazyText (Text.take 66 r)
-            dots      = if Text.length r > 66 then "..." else mempty
+            remainder = Text.takeWhile (/= '\n') (Text.take 64 r)
+            dots      = if Text.length r > 64 then "..." else mempty
         Parsing t ->
                 "Parsing: " <> Builder.fromString (show t) <> "\n"
             <>  "\n"

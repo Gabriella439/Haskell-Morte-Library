@@ -45,8 +45,8 @@ tokens :-
     "*"                                 { \_    -> yield Star                  }
     "BOX" | "□"                         { \_    -> yield Box                   }
     "->" | "→"                          { \_    -> yield Arrow                 }
+    "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                    }
     "\" | "λ"                           { \_    -> yield Lambda                }
-    "forall" | "|~|" | "\/' | "∀" | "Π" { \_    -> yield Pi                    }
     $digit+                             { \text -> yield (Number (toInt text)) }
     $labelchar+ | "(" $opchar+ ")"      { \text -> yield (Label text)          }
 
