@@ -16,18 +16,21 @@
     * Equational reasoning preserves normal forms
 
 
-    If you strongly normalize every expression then:
-
-    * Equal expressions generate identical machine code
-    * You only pay for all abstraction at compile-time instead of run-time
-
-
     Strong normalization comes at a price: Morte forbids recursion.  Instead,
     you must translate all recursion to F-algebras and translate all corecursion
     to F-coalgebras.  If you are new to F-(co)algebras then you may wish to
     read:
     <http://homepages.inf.ed.ac.uk/wadler/papers/free-rectypes/free-rectypes.txt Recursive types for free!>
 
+    Morte is designed to be a super-optimizing intermediate language with a
+    simple optimization scheme.  You optimize a Morte expression by just
+    normalizing the expression.  If you normalize an F-coalgebra you get an
+    ordinary loop, and if you normalize an F-algebra you get an unrolled loop.
+
+    Strong normalization guarantees that all abstractions are "free", meaning
+    that they may increase your program's compile times but they will never
+    increase your program's run time because they will normalize to the same
+    code.
 -}
 
 module Morte.Core (
@@ -35,20 +38,19 @@ module Morte.Core (
     Var(..),
     Const(..),
     Expr(..),
+    Context,
 
     -- * Core functions
+    typeWith,
     typeOf,
     normalize,
 
     -- * Utilities
     prettyExpr,
-    printExpr,
-    printType,
+    prettyTypeError,
 
     -- * Errors
-    prettyTypeError,
     TypeError(..),
-    Context,
     TypeMessage(..)
     ) where
 
@@ -65,7 +67,6 @@ import Data.Text ()  -- For the `IsString` instance
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text
-import qualified Data.Text.Lazy.IO as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
@@ -140,9 +141,9 @@ data Expr
     -- | > Const c        ~  c
     = Const Const
     -- | > Var (V x 0)    ~  x
-    --   > Var (V x n)    ~  xn
+    --   > Var (V x n)    ~  x@n
     | Var Var
-    -- | > Lam x A b      ~  λ(x : A) → b
+    -- | > Lam x     A b  ~  λ(x : A) → b
     | Lam Var Expr Expr
     -- | > Pi x      A B  ~  ∀(x : A) → B
     --   > Pi unused A B  ~        A  → B
@@ -215,7 +216,10 @@ instance IsString Expr
   where
     fromString str = Var (fromString str)
 
--- | Bound variables and their types
+{-| Bound variables and their types
+
+    Earlier `Var`s shadow later matching `Var`s
+-}
 type Context = [(Var, Expr)]
 
 -- | The specific type error
@@ -243,7 +247,8 @@ buildConst c = case c of
     Box  -> "□"
 
 buildVar :: Var -> Builder
-buildVar (V txt n) = fromLazyText txt <> if n == 0 then mempty else decimal n
+buildVar (V txt n) =
+    fromLazyText txt <> if n == 0 then mempty else "@" <> decimal n
 
 -- | Render a pretty-printed expression as a `Builder`
 buildExpr :: Expr -> Builder
@@ -324,7 +329,11 @@ buildTypeError (TypeError ctx expr msg)
         (fromLazyText . Text.unlines . map (toLazyText . buildKV) . reverse) ctx
 
 
--- | Find all free variables with a given label and return their numeric suffixes
+{-| Find all free variables with a given label and return their `Int`s
+
+    Use this to generate a new variable which does not clash with existing free
+    variables
+-}
 freeOf :: Text -> Expr -> IntSet
 freeOf txt = go
   where
@@ -336,7 +345,10 @@ freeOf txt = go
         App f a                      -> IntSet.union (go f) (go a)
         Const _                      -> IntSet.empty
 
--- | Substitute all occurrences of a variable with an expression
+{-| Substitute all occurrences of a variable with an expression
+
+> subst x C B  ~  B[x := C]
+-}
 subst :: Var -> Expr -> Expr -> Expr
 subst x0 e0 = go
   where
@@ -358,51 +370,53 @@ subst x0 e0 = go
                     in  c x' (go _A) (go (subst x (Var x') b))
                 else c x (go _A) (go b)
 
--- | Compute the type of an expression, given a context
-typeOf_ :: Context -> Expr -> Either TypeError Expr
-typeOf_ ctx e = case e of
+{-| Type-check an expression and return the expression's type if type-checking
+    suceeds or an error if type-checking fails
+
+    `typeWith` does not necessarily normalize the type since full normalization
+    is not necessary for just type-checking.  If you actually care about the
+    returned type then you may want to `normalize` it afterwards.
+-}
+typeWith :: Context -> Expr -> Either TypeError Expr
+typeWith ctx e = case e of
     Const c  -> fmap Const (axiom c)
     Var x    -> case lookup x ctx of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b -> do
-        _B <- typeOf_ ((x, _A):ctx) b
+        _B <- typeWith ((x, _A):ctx) b
         let p = Pi x _A _B
-        _t <- typeOf_ ctx p
+        _t <- typeWith ctx p
         return p
     Pi  x _A _B -> do
-        eS <- fmap whnf (typeOf_ ctx _A)
+        eS <- fmap whnf (typeWith ctx _A)
         s  <- case eS of
             Const s -> return s
             _       -> Left (TypeError ctx e (InvalidInputType _A))
         let ctx' = (x, _A):ctx
-        eT <- fmap whnf (typeOf_ ctx' _B)
+        eT <- fmap whnf (typeWith ctx' _B)
         t  <- case eT of
             Const t -> return t
             _       -> Left (TypeError ctx' e (InvalidOutputType _B))
         fmap Const (rule s t)
     App f a  -> do
-        e' <- fmap whnf (typeOf_ ctx f)
+        e' <- fmap whnf (typeWith ctx f)
         (x, _A, _B) <- case e' of
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e NotAFunction)
-        _A' <- typeOf_ ctx a
+        _A' <- typeWith ctx a
         let nf_A  = normalize _A 
             nf_A' = normalize _A'
         if nf_A == nf_A'
             then return (subst x a _B)
             else Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
 
-{-| Type-check an expression and return the expression's type if type-checking
-    suceeds or an error if type-checking fails
-
-    The expression must be closed (no free variables), otherwise type-checking
-    will fail.
-
-    `typeOf` does not necessarily normalize the type.
+{-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
+    expression must be closed (no free variables), otherwise type-checking will
+    fail.
 -}
 typeOf :: Expr -> Either TypeError Expr
-typeOf = typeOf_ []
+typeOf = typeWith []
 
 -- | Reduce an expression to weak-head normal form
 whnf :: Expr -> Expr
@@ -423,9 +437,12 @@ freeIn x = go
         App f a     -> go f || go a
         Const _     -> False
 
-{-| Reduce an expression to its normal form
+{-| Reduce an expression to its normal form, performing both beta reduction and
+    eta reduction
 
-    `normalize` does not type-check the expression.
+    `normalize` does not type-check the expression.  You may want to type-check
+    expressions before normalizing them since normalization can convert an
+    ill-typed expression into a well-typed expression.
 -}
 normalize :: Expr -> Expr
 normalize e = case e of
@@ -445,27 +462,13 @@ normalize e = case e of
     Var   _    -> e
     Const _    -> e
 
--- | Render a pretty-printed expression as `Text`
+{-| Pretty-print an expression
+
+    The result is syntactically valid Morte code
+-}
 prettyExpr :: Expr -> Text
 prettyExpr = toLazyText . buildExpr
 
--- | Render a type error as `Text`
+-- | Pretty-print a type error
 prettyTypeError :: TypeError -> Text
 prettyTypeError = toLazyText . buildTypeError
-
-{-| Convenience function to pretty-print an expression to the console
-
-    `printExpr` does not type-check or normalize the expression.
--}
-printExpr :: Expr -> IO ()
-printExpr = Text.putStrLn . prettyExpr
-
-{-| Convenience function to pretty print an expression's type, or output an error
-    message if type checking fails
-
-    `printType` does not necessarily normalize the type.
--}
-printType :: Expr -> IO ()
-printType expr = case typeOf expr of
-    Left err -> Text.putStr (prettyTypeError err)
-    Right t  -> Text.putStrLn (prettyExpr t)

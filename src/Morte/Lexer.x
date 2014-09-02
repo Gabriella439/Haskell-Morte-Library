@@ -4,9 +4,11 @@
 -- | Lexing logic for the Morte language
 module Morte.Lexer (
     -- * Lexer
+    lexExpr,
+
+    -- * Types
     Token(..),
-    Position(..),
-    lexExpr
+    Position(..)
     ) where
 
 import Control.Monad.Trans.State.Strict (State)
@@ -77,7 +79,7 @@ encode c = (fromIntegral h, map fromIntegral t)
                 ]
             )
 
--- | The cursor's location while lexing the file
+-- | The cursor's location while lexing the text
 data Position = P
     { lineNo    :: {-# UNPACK #-} !Int
     , columnNo  :: {-# UNPACK #-} !Int
@@ -117,7 +119,7 @@ alexInputPrevChar = prevChar
 {-| Convert a text representation of an expression into a stream of tokens
 
     `lexExpr` keeps track of position and returns the remainder of the input if
-    lexing fils
+    lexing fails.
 -}
 lexExpr :: Text -> Producer Token (State Position) (Maybe Text)
 lexExpr text = go (AlexInput '\n' [] text)

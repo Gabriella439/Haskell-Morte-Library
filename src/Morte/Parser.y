@@ -73,7 +73,12 @@ AExpr :: { Expr }
 
 {
 -- | The specific parsing error
-data ParseMessage = Lexing Text | Parsing Lexer.Token deriving (Show)
+data ParseMessage
+    -- | Lexing failed, returning the remainder of the text
+    = Lexing Text
+    -- | Parsing failed, returning the invalid token
+    | Parsing Token
+    deriving (Show)
 
 {- This is purely to satisfy the unnecessary `Error` constraint for `ErrorT`
 
