@@ -1,5 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
+import Data.Monoid ((<>))
 import qualified Data.Text.Lazy.IO as Text
 import Morte.Core
 import Morte.Parser
@@ -25,4 +28,4 @@ main = do
             Left  te       -> Text.putStr (prettyTypeError te)
             Right typeExpr -> do
                 Text.putStrLn (prettyExpr (normalize typeExpr))
-                Text.writeFile outFile (prettyExpr (normalize expr))
+                Text.writeFile outFile (prettyExpr (normalize expr) <> "\n")
