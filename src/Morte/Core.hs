@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -Wall #-}
 
-{-| This module contains the core calculus for the Morte language.  This language
-    is a minimalist implementation of the calculus of constructions, which is in
-    turn a specific kind of pure type system.  If you are new to pure type
-    systems you may wish to read the paper this library is heavily based upon:
+{-| This module contains the core calculus for the Morte language.  This
+    language is a minimalist implementation of the calculus of constructions,
+    which is in turn a specific kind of pure type system.  If you are new to
+    pure type systems you may wish to read the paper this library is heavily
+    based upon:
     <http://research.microsoft.com/en-us/um/people/simonpj/papers/henk.ps.gz Henk: a typed intermediate language>.
 
 
@@ -21,9 +22,10 @@
     * You only pay for all abstraction at compile-time instead of run-time
 
 
-    Strong normalization comes at a price: Morte forbids recursion.  Instead, you
-    must translate all recursion to F-algebras and translate all corecursion to
-    F-coalgebras.  If you are new to F-(co)algebras then you may wish to read:
+    Strong normalization comes at a price: Morte forbids recursion.  Instead,
+    you must translate all recursion to F-algebras and translate all corecursion
+    to F-coalgebras.  If you are new to F-(co)algebras then you may wish to
+    read:
     <http://homepages.inf.ed.ac.uk/wadler/papers/free-rectypes/free-rectypes.txt Recursive types for free!>
 
 -}
