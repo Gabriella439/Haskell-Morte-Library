@@ -13,6 +13,7 @@
 
     * Be super-optimizable - by disabling unrestricted recursion
 
+
     This library does not provide any front-end or back-end language for Morte.
     These will be provided as separate libraries in the future.
 
@@ -33,17 +34,23 @@ module Morte.Tutorial (
     -- * Desugaring
     -- $desugaring
 
-    -- ** let
+    -- ** Let
     -- $let
 
     -- ** Simple types
     -- $types
 
-    -- ** newtypes
+    -- ** Newtypes
     -- $newtypes
 
     -- ** Recursion
     -- $recursion
+
+    -- ** Corecursion
+    -- $corecursion
+
+    -- ** Existential Quantification
+    -- $existential
     ) where
 
 import Morte.Core
@@ -190,7 +197,7 @@ import Morte.Core
 
     Note that Morte's syntax does not include:
 
-    * @let@
+    * @let@ expressions
 
     * @case@ expressions
 
@@ -205,6 +212,7 @@ import Morte.Core
     * Modules or imports
 
     * Recursion / Corecursion
+
 
     Future front-ends to Morte will support these higher-level abstractions, but
     for now you must desugar all of these to lambda calculus before Morte can
@@ -302,8 +310,8 @@ import Morte.Core
     The following sections use a technique known as Boehm-Berarducci encoding to
     convert recursive data types to lambda terms.  If you already know what
     Boehm-Berarducci encoding is then you can skip these sections.  You might
-    already recognize special cases of this technique as CPS-encoding or
-    Church-encoding.
+    already recognize this technique by the names of overlapping techniques such
+    as CPS-encoding, Church-encoding, or F-algebras.
 
     I'll first explain how to desugar a somewhat complicated non-recursive type
     and then show how this trick specializes to simpler types.  The first
@@ -967,7 +975,131 @@ import Morte.Core
     loops over the list just once, applying @\'f\'@ and @\'g\'@ to every value:
 
 > $ morte < mapcomp1.mt
-> ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (a → x → x) → x → x) → ∀(x : *) → (c → x → x) → x → x
-> λ(a : *) → λ(b : *) → λ(c : *) → λ(f : b → c) → λ(g : a → b) → λ(l : ∀(x : *) → (a → x → x) → x → x) → λ(x : *) → λ(Cons : c → x → x) → l x (λ(va : a) → Cons (f (g va)))
+> ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (a → x → x) →
+>  x → x) → ∀(x : *) → (c → x → x) → x → x
+> λ(a : *) → λ(b : *) → λ(c : *) → λ(f : b → c) → λ(g : a → b) → λ(l : ∀(x : *) 
+> → (a → x → x) → x → x) → λ(x : *) → λ(Cons : c → x → x) → l x (λ(va : a) → Con
+> s (f (g va)))
+
+    The encoding outlined in this section is equivalent to an F-algebra encoding
+    of a recursive type, which is any encoding of the following shape:
+
+> forall (x : *) -> (F x -> x) -> x
+
+    Our @List a@ encoding is isomorphic to an F-algebra encoding where:
+
+> F x = Maybe (a, x)
+
+    ... and our @Nat@ encoding is isomorphic to an F-algebra encoding where:
+
+> F x = Maybe x
+
+-}
+
+{- $existential
+    You can translate existential quantified types to use universal
+    quantification.  For example, consider the following existentially
+    quantified Haskell type:
+
+> let data Example = forall s . MkExample s (s -> String)
+>
+> in  result
+
+    The equivalent Morte program is:
+
+> -- let data Example = forall s . Example s (s -> String)
+> --
+> -- in  result
+> 
+> \(String : *) ->
+> (   \(Example : *)
+> ->  \(MkExample : forall (s : *) -> s -> (s -> String) -> Example)
+> ->  \(  matchExample
+>     :   Example
+>     ->  forall (x : *)
+>     ->  (forall (s : *) -> s -> (s -> String) -> x)
+>     ->  x
+>     )
+> ->  result
+> )
+> 
+> -- Example
+> (   forall (x : *)
+> ->  (forall (s : *) -> s -> (s -> String) -> x)  -- MkExample
+> ->  x
+> )
+> 
+> -- MkExample
+> (   \(s : *)
+> ->  \(vs : s)
+> ->  \(fs : s -> String)
+> ->  \(x : *)
+> ->  \(MkExample : forall (s : *) -> s -> (s -> String) -> x)
+> ->  MkExample s vs fs
+> )
+> 
+> -- matchExample
+> (   \(e : forall (x : *) -> (forall (s : *) -> s -> (s -> String) -> x) -> x)
+> ->  e
+> )
+
+    More generally, for every constructor that you existentially quantify with a
+    variable @\'s\'@ you add a @(forall (s : *) -> ...)@ prefix to that
+    constructor's continuation.  If you \"pattern match\" against the
+    constructor corresponding to that continuation you will
+    bind the existentially quantified type.
+
+    For example, we can pattern match against the @MkExample@ constructor like
+    this:
+
+> \(e : Example) -> matchExample e
+>       (\(s : *) -> (x : s) -> (f : s -> String) -> expr) 
+
+    The type @\'s\'@ will be in scope for @expr@ and we can safely apply the
+    bound function to the bound value if we so chose to extract a @String@,
+    despite not knowing which type @\'s\'@ we bound:
+
+> \(e : Example) -> matchExample e
+>       (\(s : *) -> (x : s) -> (f : s -> String) -> f x) 
+
+    The two universal quantifiers in the definition of the @Example@ type
+    statically forbid the type @\'s\'@ from leaking from the pattern match.
+-}
+
+{- $corecursion
+    Recursive types can only encode finite data types.  If you want a
+    potentially infinite data type (such as an infinite list), you must encode
+    the type as a seed and a generating step function.
+
+    For example, consider the following infinite stream type:
+
+> codata Stream a = Cons a (Stream a)
+
+    If you tried to encode that as a recursive type, you would end up with this
+    Morte type:
+
+> \(a : *) -> forall (x : *) -> (a -> x -> x) -> x
+
+    However, this type is uninhabited, meaning that you cannot create a value of
+    the above type (for any choice of @\'a\'@).
+
+    Instead, you translate the corecursive type to the following non-recursive
+    and existentially quantified type:
+
+> -- Replace the corecursive occurrence of `Stream` with `s`
+> data StreamF a s = Cons a s
+>
+> data Stream a = forall s . MkStream s (s -> StreamF a s)
+
+    In fact, this is an example of a F-coalgebra encoding of a corecursive type,
+    which is anything of the form:
+
+> exists s . (s, s -> F s)
+
+    Once you F-coalgebra encode the @Stream@ type you can translate the type to
+    Morte using the rules for existential quantification given in the previous
+    section:
+
+> (forall (x : *) -> (forall (s : *) -> s -> (s -> StreamF a s) -> x) -> x
 
 -}
