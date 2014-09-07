@@ -32,7 +32,8 @@ Library
     Exposed-Modules:
         Morte.Core,
         Morte.Lexer,
-        Morte.Parser
+        Morte.Parser,
+        Morte.Tutorial
     Build-Tools: alex, happy
     GHC-Options: -O2
 
