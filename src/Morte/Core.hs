@@ -73,7 +73,6 @@ import Data.Typeable (Typeable)
 import Data.Word (Word8)
 
 -- TODO: Include example use cases in module header
--- TODO: Document all functions
 
 {-| Label for a bound variable
 
@@ -447,8 +446,8 @@ freeIn x = go
 normalize :: Expr -> Expr
 normalize e = case e of
     Lam x _A b -> case b' of
-        App f a -> case normalize a of
-            Var x' | x == x' && not (x `freeIn` f) -> normalize f  -- Eta reduce
+        App f a -> case a of
+            Var x' | x == x' && not (x `freeIn` f) -> f  -- Eta reduce
                    | otherwise                     -> e'
             _                                      -> e'
         _       -> e'
