@@ -5,6 +5,7 @@ import Morte.Core (typeOf, prettyTypeError, prettyExpr, normalize)
 import Morte.Parser (exprFromText, prettyParseError)
 import Options.Applicative
 import System.IO (stderr)
+import System.Exit (exitFailure)
 
 main :: IO ()
 main = do
@@ -18,9 +19,13 @@ main = do
         )
     inText <- Text.getContents
     case exprFromText inText of
-        Left  pe   -> Text.hPutStr stderr (prettyParseError pe)
+        Left  pe   -> do
+            Text.hPutStr stderr (prettyParseError pe)
+            exitFailure
         Right expr -> case typeOf expr of
-            Left  te       -> Text.hPutStr stderr (prettyTypeError te)
+            Left  te       -> do
+                Text.hPutStr stderr (prettyTypeError te)
+                exitFailure
             Right typeExpr -> do
                 Text.hPutStrLn stderr (prettyExpr (normalize typeExpr))
                 Text.putStrLn (prettyExpr (normalize expr))
