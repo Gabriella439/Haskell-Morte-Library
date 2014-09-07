@@ -4,33 +4,37 @@
 {-| This module contains the core calculus for the Morte language.  This
     language is a minimalist implementation of the calculus of constructions,
     which is in turn a specific kind of pure type system.  If you are new to
-    pure type systems you may wish to read the paper this library is heavily
-    based upon:
-    <http://research.microsoft.com/en-us/um/people/simonpj/papers/henk.ps.gz Henk: a typed intermediate language>.
+    pure type systems you may wish to read \"Henk: a typed intermediate
+    language\".
+
+    <http://research.microsoft.com/en-us/um/people/simonpj/papers/henk.ps.gz>
 
 
     Morte is a strongly normalizing language, meaning that:
 
     * Every expression has a unique normal form computed by `normalize`
+
     * You test expressions for equality of their normal forms using `==`
+
     * Equational reasoning preserves normal forms
 
 
-    Strong normalization comes at a price: Morte forbids recursion.  Instead,
-    you must translate all recursion to F-algebras and translate all corecursion
-    to F-coalgebras.  If you are new to F-(co)algebras then you may wish to
-    read:
-    <http://homepages.inf.ed.ac.uk/wadler/papers/free-rectypes/free-rectypes.txt Recursive types for free!>
+    Strong normalization comes at a price: Morte forbids recursion, which is
+    syntactically unrepresentable.  Instead, you must translate all recursion to
+    F-algebras and translate all corecursion to F-coalgebras.  If you are new to
+    F-(co)algebras then you may wish to read \"Recursive types for free!\":
+
+    <http://homepages.inf.ed.ac.uk/wadler/papers/free-rectypes/free-rectypes.txt>
 
     Morte is designed to be a super-optimizing intermediate language with a
     simple optimization scheme.  You optimize a Morte expression by just
     normalizing the expression.  If you normalize an F-coalgebra you get an
     ordinary loop, and if you normalize an F-algebra you get an unrolled loop.
 
-    Strong normalization guarantees that all abstractions are "free", meaning
-    that they may increase your program's compile times but they will never
-    increase your program's run time because they will normalize to the same
-    code.
+    Strong normalization guarantees that all abstractions encodable in Morte are
+    \"free\", meaning that they may increase your program's compile times but
+    they will never increase your program's run time because they will normalize
+    to the same code.
 -}
 
 module Morte.Core (
@@ -411,8 +415,8 @@ typeWith ctx e = case e of
             else Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
-    expression must be closed (no free variables), otherwise type-checking will
-    fail.
+    expression must be closed (i.e. no free variables), otherwise type-checking
+    will fail.
 -}
 typeOf :: Expr -> Either TypeError Expr
 typeOf = typeWith []
