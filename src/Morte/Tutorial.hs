@@ -3,15 +3,15 @@
 
     You can think of Morte as a very low-level virtual machine for functional
     languages.  This virtual machine was designed with the following design
-    principles:
+    principles, in descending order of importance:
 
-    * Be simple - so people can reason about Morte's soundness
+    * Be super-optimizable - by disabling unrestricted recursion
 
-    * Be portable - so you can transmit code, even between different languages
+    * Be portable - so you can transmit code between different languages
 
     * Be efficient - so that Morte can scale to large code bases
 
-    * Be super-optimizable - by disabling unrestricted recursion
+    * Be simple - so people can reason about Morte's soundness
 
 
     This library does not provide any front-end or back-end language for Morte.
@@ -46,11 +46,23 @@ module Morte.Tutorial (
     -- ** Recursion
     -- $recursion
 
+    -- ** Existential Quantification
+    -- $existential
+
     -- ** Corecursion
     -- $corecursion
 
-    -- ** Existential Quantification
-    -- $existential
+    -- * Optimization
+    -- $optimization
+
+    -- ** Normalization
+    -- $normalization
+
+    -- * Effects
+    -- $effects
+
+    -- * Portability
+    -- $portability
     ) where
 
 import Morte.Core
@@ -217,7 +229,7 @@ import Morte.Core
     Future front-ends to Morte will support these higher-level abstractions, but
     for now you must desugar all of these to lambda calculus before Morte can
     type-check and optimize your program.  The following sections explain how to
-    desugar these abstractions.
+    desugar these abstractions from a Haskell-like language.
 -}
 
 {- $let
@@ -497,7 +509,8 @@ import Morte.Core
     The compiler reduces the program to @One@.  All the dead code has been
     eliminated.  Also, if you study the output program closely, you'll notice
     that it's equivalent to @False@ and the program's type is equivalent to the
-    @Bool@ type.
+    @Bool@ type.  Try flipping the @Zero@ and @One@ arguments to @if@ and see
+    what happens.
 
     Now let's implement Haskell's binary tuple type, except using a named type
     and constructor since Morte does not support tuple syntax:
@@ -590,7 +603,8 @@ import Morte.Core
 > ∀(a : *) → a → a → a
 > λ(a : *) → λ(x : a) → λ(y : a) → y
 
-    This is also equal to our previous program.
+    This is also equal to our previous program.  Just rename @\'a\'@ to @Int@,
+    rename @\'x\'@ to @Zero@ and rename @\'y\'@ to @One@.
 
     You can also import data types from whatever backend you use by accepting
     those types and functions on those types as explicit arguments to your
@@ -745,7 +759,97 @@ import Morte.Core
     references to the data type with the type of the final result, pretending
     that the final result is a list.
 
-    Here's another example, using natural numbers:
+    Let's extend the @List@ example with the @Bool@ code to implement Haskell's
+    @any@ function and use it on an actual @List@ of @Bool@s:
+
+> -- any.mt
+>
+> -- let data Bool = True | False
+> --
+> --     data List a = Cons a (List a) | Nil
+> --
+> -- in  let (&&) :: Bool -> Bool -> Bool
+> --         (&&) b1 b2 = if b1 then b2 else False
+> --
+> --         bools :: List Bool
+> --         bools = Cons True (Cons True (Cons True Nil))
+> --
+> --     in  foldr bools (&&) True
+> 
+> (   \(Bool : *)
+> ->  \(True  : Bool)
+> ->  \(False : Bool)
+> ->  \(if : Bool -> forall (r : *) -> r -> r -> r)
+> ->  \(List : * -> *)
+> ->  \(Cons : forall (a : *) -> a -> List a -> List a)
+> ->  \(Nil  : forall (a : *)                -> List a)
+> ->  \(  foldr
+>     :   forall (a : *) -> List a -> forall (r : *) -> (a -> r -> r) -> r -> r
+>     )
+> ->  (   \((&&) : Bool -> Bool -> Bool)
+>     ->  \(bools : List Bool)
+>     ->  foldr Bool bools Bool (&&) True
+>     )
+> 
+>     -- (&&)
+>     (\(b@1 : Bool) -> \(b@2 : Bool) -> if b@1 Bool b@2 False)
+> 
+>     -- bools
+>     (Cons Bool True (Cons Bool True (Cons Bool True (Nil Bool))))
+> )
+> 
+> -- Bool
+> (forall (r : *) -> r -> r -> r)
+> 
+> -- True
+> (\(r : *) -> \(x : r) -> \(_ : r) -> x)
+> 
+> -- False
+> (\(r : *) -> \(_ : r) -> \(x : r) -> x)
+> 
+> -- if
+> (\(b : forall (r : *) -> r -> r -> r) -> b)
+> 
+> -- List
+> (   \(a : *)
+> ->  forall (list : *)
+> ->  (a -> list -> list)  -- Cons
+> ->  list                 -- Nil
+> ->  list
+> )
+> 
+> -- Cons
+> (   \(a : *)
+> ->  \(va  : a)
+> ->  \(vas : forall (list : *) -> (a -> list -> list) -> list -> list)
+> ->  \(list : *)
+> ->  \(Cons : a -> list -> list)
+> ->  \(Nil  : list)
+> ->  Cons va (vas list Cons Nil)
+> )
+> 
+> -- Nil
+> (   \(a : *)
+> ->  \(list : *)
+> ->  \(Cons : a -> list -> list)
+> ->  \(Nil  : list)
+> ->  Nil
+> )
+> 
+> -- foldr
+> (   \(a : *)
+> ->  \(vas : forall (list : *) -> (a -> list -> list) -> list -> list)
+> ->  vas
+> )
+
+    If you type-check and optimize the program, the compiler will statically
+    evaluate the entire computation, reducing the program to @True@:
+
+> $ morte < any.mt
+> ∀(r : *) → r → r → r
+> λ(r : *) → λ(x : r) → λ(_ : r) → x
+
+    Here's another example of encoding a recursive type, using natural numbers:
 
 > -- let data Nat = Succ Nat | Zero
 > --
@@ -782,9 +886,163 @@ import Morte.Core
 > ->  n
 > )
 
+    As an exercise, try implementing @(+)@ for the @Nat@ type, then implementing
+    Haskell's @sum@, then using @sum@ on a @List@ of @Nat@s.  Verify that the
+    compiler statically computes the sum as a Church-encoded numeral.
+     
+    The encoding outlined in this section is equivalent to an F-algebra encoding
+    of a recursive type, which is any encoding of the following shape:
+
+> forall (x : *) -> (F x -> x) -> x
+
+    .. where @F@ is a strictly-positive functor.
+
+    Our @List a@ encoding is isomorphic to an F-algebra encoding where:
+
+> F x = Maybe (a, x)
+
+    ... and our @Nat@ encoding is isomorphic to an F-algebra encoding where:
+
+> F x = Maybe x
+
+-}
+
+{- $existential
+    You can translate existential quantified types to use universal
+    quantification.  For example, consider the following existentially
+    quantified Haskell type:
+
+> let data Example = forall s . MkExample s (s -> String)
+>
+> in  result
+
+    The equivalent Morte program is:
+
+> -- let data Example = forall s . Example s (s -> String)
+> --
+> -- in  result
+> 
+> \(String : *) ->
+> (   \(Example : *)
+> ->  \(MkExample : forall (s : *) -> s -> (s -> String) -> Example)
+> ->  \(  matchExample
+>     :   Example
+>     ->  forall (x : *)
+>     ->  (forall (s : *) -> s -> (s -> String) -> x)
+>     ->  x
+>     )
+> ->  result
+> )
+> 
+> -- Example
+> (   forall (x : *)
+> ->  (forall (s : *) -> s -> (s -> String) -> x)  -- MkExample
+> ->  x
+> )
+> 
+> -- MkExample
+> (   \(s : *)
+> ->  \(vs : s)
+> ->  \(fs : s -> String)
+> ->  \(x : *)
+> ->  \(MkExample : forall (s : *) -> s -> (s -> String) -> x)
+> ->  MkExample s vs fs
+> )
+> 
+> -- matchExample
+> (   \(e : forall (x : *) -> (forall (s : *) -> s -> (s -> String) -> x) -> x)
+> ->  e
+> )
+
+    More generally, for every constructor that you existentially quantify with a
+    type variable @\'s\'@ you just add a @(forall (s : *) -> ...)@ prefix to
+    that constructor's continuation.  If you \"pattern match\" against the
+    constructor corresponding to that continuation you will bind the
+    existentially quantified type.
+
+    For example, we can pattern match against the @MkExample@ constructor like
+    this:
+
+> \(e : Example) -> matchExample e
+>       (\(s : *) -> (x : s) -> (f : s -> String) -> expr) 
+
+    The type @\'s\'@ will be in scope for @expr@ and we can safely apply the
+    bound function to the bound value if we so chose to extract a @String@,
+    despite not knowing which type @\'s\'@ we bound:
+
+> \(e : Example) -> matchExample e
+>       (\(s : *) -> (x : s) -> (f : s -> String) -> f x) 
+
+    The two universal quantifiers in the definition of the @Example@ type
+    statically forbid the type @\'s\'@ from leaking from the pattern match.
+-}
+
+{- $corecursion
+    Recursive types can only encode finite data types.  If you want a
+    potentially infinite data type (such as an infinite list), you must encode
+    the type in a different way.
+
+    For example, consider the following infinite stream type:
+
+> codata Stream a = Cons a (Stream a)
+
+    If you tried to encode that as a recursive type, you would end up with this
+    Morte type:
+
+> \(a : *) -> forall (x : *) -> (a -> x -> x) -> x
+
+    However, this type is uninhabited, meaning that you cannot create a value of
+    the above type for any choice of @\'a\'@.  Try it, if you don't believe
+    me.
+
+    Potentially infinite types must be encoded using a dual trick, where we
+    store them as an existentially quantified seed and a generating step
+    function that emits one layer alongside a new seed.
+
+    For example, the above @Stream@ type would translate to the following
+    non-recursive representation.  The @StreamF@ constructor represents one
+    layer and the @Stream@ type lets us generate an infinite number of layers
+    by providing an initial seed of type @s@ and a generation function of type
+    @(s -> StreamF a s)@:
+
+> -- Replace the corecursive occurrence of `Stream` with `s`
+> data StreamF a s = Cons a s
+>
+> data Stream a = forall s . MkStream s (s -> StreamF a s)
+
+    The above type will work for any type @\'s\'@ as the @\'s\'@ is
+    existentially quantified.  The end user of the @Stream@ will never be able
+    to detect what the original type of @s@ was, because the @MkStream@
+    constructor closes over that information permanently.
+
+    An example @Stream@ is the following lazy stream of natural numbers:
+
+> nats :: Stream Int
+> nats = MkStream 0 (\n -> Cons n (n + 1))
+
+    Internally, the above @Stream@ uses an @Int@ as its internal state, but
+    that is completely invisible to all downstream code, which cannot access
+    the concrete type of the internal state any longer.
+
+    In fact, this trick of using a seed and a generating step function is a
+    special case of a F-coalgebra encoding of a corecursive type, which is
+    anything of the form:
+
+> exists s . (s, s -> F s)
+
+    Once you F-coalgebra encode the @Stream@ type you can translate the type to
+    Morte using the rules for existential quantification given in the previous
+    section:
+
+> (forall (x : *) -> (forall (s : *) -> s -> (s -> StreamF a s) -> x) -> x
+
+    See the next section for some example @Stream@ code.
+-}
+
+{- $optimization
     You might wonder why Morte forbids recursion, forcing us to encode data
-    types this way.  Morte imposes this restriction this in order to
-    super-optimize your program.  For example, consider the following
+    types F-algebras or F-coalgebras.  Morte imposes this restriction this in
+    order to super-optimize your program.  For example, consider the following
     program which maps the identity function over a list:
 
 > -- mapid1.mt
@@ -854,7 +1112,7 @@ import Morte.Core
 > λ(a : *) → λ(va : ∀(x : *) → (a → x → x) → x → x) → va
 
     However, we don't have to trust our fallible eyes.  We can enlist the
-    library to mechanically check that the two programs are equal:
+    @morte@ library to mechanically check that the two programs are equal:
 
 > $ ghci
 > Prelude> import qualified Data.Text.Lazy.IO as Text
@@ -867,7 +1125,7 @@ import Morte.Core
 > Prelude Text Morte.Parser Control.Applicative> liftA2 (==) e1 e2
 > Right True
 
-    We just mechanically proven that @map id == id@.  When we transform our code
+    We just mechanically proved that @map id == id@.  When we transform our code
     to a non-recursive form we've done most of the work.  The compiler can then
     check that the two programs are equal by just optimizing both programs and
     verifying that they produce identical optimized code.
@@ -876,7 +1134,8 @@ import Morte.Core
 
 > map (f . g) = map f . map g
 
-    Here is the first program:
+    Here is the first program, corresponding to the left-hand side of the
+    equation:
 
 > -- mapcomp1.mt
 >
@@ -924,7 +1183,7 @@ import Morte.Core
 > ->  f (g va)
 > )
 
-    ... and here is the second program:
+    ... and here is the second program, corresponding to the right-hand side:
 
 > -- mapcomp2.mt
 > 
@@ -970,9 +1229,10 @@ import Morte.Core
 > ->  f (g va)
 > )
 
-    Verify using the library that those produce identical expressions.  For
-    reference, they both generate the following type and optimized program that
-    loops over the list just once, applying @\'f\'@ and @\'g\'@ to every value:
+    Verify using the @morte@ library that those produce identical expressions.
+    For reference, they both generate the following type and optimized program
+    that loops over the list just once, applying @\'f\'@ and @\'g\'@ to every
+    value:
 
 > $ morte < mapcomp1.mt
 > ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (a → x → x) →
@@ -981,125 +1241,573 @@ import Morte.Core
 > → (a → x → x) → x → x) → λ(x : *) → λ(Cons : c → x → x) → l x (λ(va : a) → Con
 > s (f (g va)))
 
-    The encoding outlined in this section is equivalent to an F-algebra encoding
-    of a recursive type, which is any encoding of the following shape:
+    We can also prove @map@ fusion for corecursive streams as well.  Just use
+    the following program:
 
-> forall (x : *) -> (F x -> x) -> x
-
-    Our @List a@ encoding is isomorphic to an F-algebra encoding where:
-
-> F x = Maybe (a, x)
-
-    ... and our @Nat@ encoding is isomorphic to an F-algebra encoding where:
-
-> F x = Maybe x
-
--}
-
-{- $existential
-    You can translate existential quantified types to use universal
-    quantification.  For example, consider the following existentially
-    quantified Haskell type:
-
-> let data Example = forall s . MkExample s (s -> String)
->
-> in  result
-
-    The equivalent Morte program is:
-
-> -- let data Example = forall s . Example s (s -> String)
-> --
-> -- in  result
+> -- first :: (a -> b) -> (a, c) -> (b, c)
+> -- first f (va, vb) = (f va, vb) 
+> -- 
+> -- data Stream a = Cons (a, Stream a)
+> -- 
+> -- map :: (a -> b) -> Stream a -> Stream b
+> -- map f (Cons (va, s)) = Cons (first f (va, map f s))
+> -- 
+> -- -- example1 = example2
+> -- 
+> -- example1 :: Stream a -> Stream a
+> -- example1 = map id
+> -- 
+> -- example2 :: Stream a -> Stream a
+> -- example2 = id
+> -- 
+> -- -- example3 = example4
+> -- 
+> -- example3 :: (b -> c) -> (a -> b) -> Stream a -> Stream c
+> -- example3 f g = map (f . g)
+> -- 
+> -- example4 :: (b -> c) -> (a -> b) -> Stream a -> Stream c
+> -- example4 f g = map f . map g
 > 
-> \(String : *) ->
-> (   \(Example : *)
-> ->  \(MkExample : forall (s : *) -> s -> (s -> String) -> Example)
-> ->  \(  matchExample
->     :   Example
+> (   \(id : forall (a : *) -> a -> a)
+> ->  \(  (.)
+>     :   forall (a : *)
+>     ->  forall (b : *)
+>     ->  forall (c : *)
+>     ->  (b -> c)
+>     ->  (a -> b)
+>     ->  (a -> c)
+>     )
+> ->  \(Pair : * -> * -> *)
+> ->  \(P : forall (a : *) -> forall (b : *) -> a -> b -> Pair a b)
+> ->  \(  first
+>     :   forall (a : *)
+>     ->  forall (b : *)
+>     ->  forall (c : *)
+>     ->  (a -> b)
+>     ->  Pair a c
+>     ->  Pair b c
+>     )
+> 
+> ->  (   \(Stream : * -> *)
+>     ->  \(  map
+>         :   forall (a : *)
+>         ->  forall (b : *)
+>         ->  (a -> b)
+>         ->  Stream a
+>         ->  Stream b
+>         )
+> 
+>         -- example@1 = example@2
+>     ->  (   \(example@1 : forall (a : *) -> Stream a -> Stream a)
+>         ->  \(example@2 : forall (a : *) -> Stream a -> Stream a)
+> 
+>         -- example@3 = example@4
+>         ->  \(  example@3
+>             :   forall (a : *)
+>             ->  forall (b : *)
+>             ->  forall (c : *)
+>             ->  (b -> c)
+>             ->  (a -> b)
+>             ->  Stream a
+>             ->  Stream c
+>             )
+> 
+>         ->  \(  example@4
+>             :   forall (a : *)
+>             ->  forall (b : *)
+>             ->  forall (c : *)
+>             ->  (b -> c)
+>             ->  (a -> b)
+>             ->  Stream a
+>             ->  Stream c
+>             )
+> 
+>         -- Uncomment the example you want to test
+>         ->  example@1
+> --      ->  example@2
+> --      ->  example@3
+> --      ->  example@4
+>         )
+> 
+>         -- example@1
+>         (\(a : *) -> map a a (id a))
+>   
+>         -- example@2
+>         (\(a : *) -> id (Stream a))
+> 
+>         -- example@3
+>         (   \(a : *)
+>         ->  \(b : *)
+>         ->  \(c : *)
+>         ->  \(f : b -> c)
+>         ->  \(g : a -> b)
+>         ->  map a c ((.) a b c f g)
+>         )
+> 
+>         --  example@4
+>         (   \(a : *)
+>         ->  \(b : *)
+>         ->  \(c : *)
+>         ->  \(f : b -> c)
+>         ->  \(g : a -> b)
+>         ->  (.) (Stream a) (Stream b) (Stream c) (map b c f) (map a b g)
+>         )
+>     )
+> 
+>     -- Stream
+>     (   \(a : *)
 >     ->  forall (x : *)
->     ->  (forall (s : *) -> s -> (s -> String) -> x)
+>     ->  (forall (s : *) -> s -> (s -> Pair a s) -> x)
 >     ->  x
 >     )
-> ->  result
+> 
+>     -- map
+>     (   \(a : *)
+>     ->  \(b : *)
+>     ->  \(f : a -> b)
+>     ->  \(  st
+>         :   forall (x : *) -> (forall (s : *) -> s -> (s -> Pair a s) -> x) -> x
+>         )
+>     ->  \(x : *)
+>     ->  \(S : forall (s : *) -> s -> (s -> Pair b s) -> x)
+>     ->  st
+>         x
+>         (   \(s : *)
+>         ->  \(seed : s)
+>         ->  \(step : s -> Pair a s)
+>         ->  S
+>             s
+>             seed
+>             (\(seed@1 : s) -> first a b s f (step seed@1))
+>         )
+>     )
 > )
 > 
-> -- Example
-> (   forall (x : *)
-> ->  (forall (s : *) -> s -> (s -> String) -> x)  -- MkExample
-> ->  x
+> -- id
+> (\(a : *) -> \(va : a) -> va)
+> 
+> -- (.)
+> (   \(a : *)
+> ->  \(b : *)
+> ->  \(c : *)
+> ->  \(f : b -> c)
+> ->  \(g : a -> b)
+> ->  \(va : a)
+> ->  f (g va)
 > )
 > 
-> -- MkExample
-> (   \(s : *)
-> ->  \(vs : s)
-> ->  \(fs : s -> String)
+> -- Pair
+> (\(a : *) -> \(b : *) -> forall (x : *) -> (a -> b -> x) -> x)
+> 
+> -- P
+> (   \(a : *)
+> ->  \(b : *)
+> ->  \(va : a)
+> ->  \(vb : b)
 > ->  \(x : *)
-> ->  \(MkExample : forall (s : *) -> s -> (s -> String) -> x)
-> ->  MkExample s vs fs
+> ->  \(P : a -> b -> x)
+> ->  P va vb
 > )
 > 
-> -- matchExample
-> (   \(e : forall (x : *) -> (forall (s : *) -> s -> (s -> String) -> x) -> x)
-> ->  e
+> -- first
+> (   \(a : *)
+> ->  \(b : *)
+> ->  \(c : *)
+> ->  \(f : a -> b)
+> ->  \(p : forall (x : *) -> (a -> c -> x) -> x)
+> ->  \(x : *)
+> ->  \(Pair : b -> c -> x)
+> ->  p x (\(va : a) -> \(vc : c) -> Pair (f va) vc)
 > )
+> 
 
-    More generally, for every constructor that you existentially quantify with a
-    variable @\'s\'@ you add a @(forall (s : *) -> ...)@ prefix to that
-    constructor's continuation.  If you \"pattern match\" against the
-    constructor corresponding to that continuation you will
-    bind the existentially quantified type.
+Both @example\@1@ and @example\@2@ generate identical optimized expressions,
+corresponding to the identity function on @Stream@:
 
-    For example, we can pattern match against the @MkExample@ constructor like
-    this:
+> $ morte < corecursive.mt
+> ∀(a : *) → (∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) → x) →
+> x) → ∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) → x) → x
+> λ(a : *) → λ(st : ∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) 
+> → x) → x) → st
 
-> \(e : Example) -> matchExample e
->       (\(s : *) -> (x : s) -> (f : s -> String) -> expr) 
+Similarly, both @example\@3@ and @example\@4@ generate identical optimized
+expressions, corresponding to applying @f@ and @g@ to every value emitted by
+the generating step function:
 
-    The type @\'s\'@ will be in scope for @expr@ and we can safely apply the
-    bound function to the bound value if we so chose to extract a @String@,
-    despite not knowing which type @\'s\'@ we bound:
+> $ morte < corecursive.mt
+> ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (∀(s : *) → s
+>  → (s → ∀(x : *) → (a → s → x) → x) → x) → x) → ∀(x : *) → (∀(s : *) → s → (s 
+> → ∀(x : *) → (c → s → x) → x) → x) → x
+> λ(a : *) → λ(b : *) → λ(c : *) → λ(f : b → c) → λ(g : a → b) → λ(st : ∀(x : *)
+>  → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) → x) → x) → λ(x : *) → λ(S
+>  : ∀(s : *) → s → (s → ∀(x : *) → (c → s → x) → x) → x) → st x (λ(s : *) → λ(s
+> eed : s) → λ(step : s → ∀(x : *) → (a → s → x) → x) → S s seed (λ(seed@1 : s) 
+> → λ(x : *) → λ(Pair : c → s → x) → step seed@1 x (λ(va : a) → Pair (f (g va)))
+> ))
 
-> \(e : Example) -> matchExample e
->       (\(s : *) -> (x : s) -> (f : s -> String) -> f x) 
-
-    The two universal quantifiers in the definition of the @Example@ type
-    statically forbid the type @\'s\'@ from leaking from the pattern match.
 -}
 
-{- $corecursion
-    Recursive types can only encode finite data types.  If you want a
-    potentially infinite data type (such as an infinite list), you must encode
-    the type as a seed and a generating step function.
+{- $normalization
+    Morte has a very simple optimization scheme.  The only thing that Morte does
+    to optimize programs is beta-reduce them and eta-reduce them to their
+    normal form.  Since Morte's core calculus is non-recursive, this reduction
+    is guaranteed to terminate.
 
-    For example, consider the following infinite stream type:
+    The way Morte compares expressions for equality is just to compare their
+    normal forms.  Note that this definition of equality does not detect all
+    equal programs.  Here's an example of an equality that Morte does not
+    currently detect (but might detect in the future):
 
-> codata Stream a = Cons a (Stream a)
-
-    If you tried to encode that as a recursive type, you would end up with this
-    Morte type:
-
-> \(a : *) -> forall (x : *) -> (a -> x -> x) -> x
-
-    However, this type is uninhabited, meaning that you cannot create a value of
-    the above type (for any choice of @\'a\'@).
-
-    Instead, you translate the corecursive type to the following non-recursive
-    and existentially quantified type:
-
-> -- Replace the corecursive occurrence of `Stream` with `s`
-> data StreamF a s = Cons a s
+> \(k : forall (x : *) -> a -> x) -> k (f . g)
 >
-> data Stream a = forall s . MkStream s (s -> StreamF a s)
+> = f (k g)
 
-    In fact, this is an example of a F-coalgebra encoding of a corecursive type,
-    which is anything of the form:
+    This is an example of a free theorem: an equality that can be deduced purely
+    from the type of @k@.  Morte may eventually use free theorems to further
+    normalize expression, but for now it does not.
 
-> exists s . (s, s -> F s)
+    Normalization leads to certain emergent properties when optimizing recursive
+    code or corecursive code.  If you optimize a corecursive loop you will
+    produce code equivalent an @while@ loop where the seed is the initial state
+    of the loop and the generating step function unfolds one iteration of the
+    loop.  If you optimize a recursive loop you will generate an unrolled loop.
+    See the next section for an example of Morte generating a very large
+    unrolled loop.
 
-    Once you F-coalgebra encode the @Stream@ type you can translate the type to
-    Morte using the rules for existential quantification given in the previous
-    section:
+    Normalization confers one very useful property: the runtime performance of a
+    Morte program is completely impervious to abstraction.  Adding additional
+    abstraction layers may increase compile time, but runtime performance will
+    remain constant.  The runtime performance of a program is solely a function
+    of the program's normal form, and adding additional abstraction layers never
+    changes the normal form your program.
+-}
 
-> (forall (x : *) -> (forall (s : *) -> s -> (s -> StreamF a s) -> x) -> x
+{- $effects
+    Morte uses the Haskell approach to effects, where effects are represented as
+    terms within the language and evaluation order has no impact on order of
+    effects.  This is by necessity: if evaluation triggered side effects then
+    Morte would be unable to optimize expressions by normalizing them.
 
+    The following example encodes @IO@ within Morte as an abstract syntax tree
+    of effects (a.k.a. a "free monad").  Encoding @IO@ as a free monad is not
+    strictly necessary, but doing so makes Morte aware of the monad laws, which
+    allows it to greatly simplify the program:
+
+> -- The Haskell code we will translate to Morte:
+> --
+> --     import Prelude hiding (
+> --         (+), (*), IO, putStrLn, getLine, (>>=), (>>), return )
+> -- 
+> --     -- Simple prelude
+> --
+> --     data Nat = Succ Nat | Zero
+> --
+> --     zero :: Nat
+> --     zero = Zero
+> --
+> --     one :: Nat
+> --     one = Succ Zero
+> --
+> --     (+) :: Nat -> Nat -> Nat
+> --     Zero   + n = n
+> --     Succ m + n = m + Succ n
+> --
+> --     (*) :: Nat -> Nat -> Nat
+> --     Zero   * n = Zero
+> --     Succ m * n = n + (m * n)
+> --
+> --     foldNat :: Nat -> (a -> a) -> a -> a
+> --     foldNat  Zero    f x = x
+> --     foldNat (Succ m) f x = f (foldNat m f x)
+> --
+> --     data IO r = PutStrLn String (IO r) | GetLine (String -> IO r) | Return r
+> --
+> --     putStrLn :: String -> IO U
+> --     putStrLn str = PutStrLn str (Return Unit)
+> --
+> --     getLine :: IO String
+> --     getLine = GetLine Return
+> --
+> --     return :: a -> IO a
+> --     return = Return
+> --
+> --     (>>=) :: IO a -> (a -> IO b) -> IO b
+> --     PutStrLn str io >>= f = PutStrLn str (io >>= f)
+> --     GetLine k       >>= f = GetLine (\str -> k str >>= f)
+> --     Return r        >>= f = f r
+> --
+> --     -- Derived functions
+> --
+> --     (>>) :: IO U -> IO U -> IO U
+> --     m >> n = m >>= \_ -> n
+> --
+> --     two :: Nat
+> --     two = one + one
+> --
+> --     three :: Nat
+> --     three = one + one + one
+> --
+> --     four :: Nat
+> --     four = one + one + one + one
+> --
+> --     five :: Nat
+> --     five = one + one + one + one + one
+> --
+> --     six :: Nat
+> --     six = one + one + one + one + one + one
+> --
+> --     seven :: Nat
+> --     seven = one + one + one + one + one + one + one
+> --
+> --     eight :: Nat
+> --     eight = one + one + one + one + one + one + one + one
+> --
+> --     nine :: Nat
+> --     nine = one + one + one + one + one + one + one + one + one
+> --
+> --     ten :: Nat
+> --     ten = one + one + one + one + one + one + one + one + one + one
+> --
+> --     replicateM_ :: Nat -> IO U -> IO U
+> --     replicateM_ n io = foldNat n (io >>) (return Unit)
+> --
+> --     ninetynine :: Nat
+> --     ninetynine = nine * ten + nine
+> --
+> --     main_ :: IO U
+> --     main_ = getLine >>= putStrLn
+> 
+> -- "Free" variables
+> (   \(String : *   )
+> ->  \(U : *)
+> ->  \(Unit : U)
+> 
+>     -- Simple prelude
+> ->  (   \(Nat : *)
+>     ->  \(zero : Nat)
+>     ->  \(one : Nat)
+>     ->  \((+) : Nat -> Nat -> Nat)
+>     ->  \((*) : Nat -> Nat -> Nat)
+>     ->  \(foldNat : Nat -> forall (a : *) -> (a -> a) -> a -> a)
+>     ->  \(IO : * -> *)
+>     ->  \(return : forall (a : *) -> a -> IO a)
+>     ->  \((>>=)
+>         :   forall (a : *)
+>         ->  forall (b : *)
+>         ->  IO a
+>         ->  (a -> IO b)
+>         ->  IO b
+>         )
+>     ->  \(putStrLn : String -> IO U)
+>     ->  \(getLine : IO String)
+> 
+>         -- Derived functions
+>     ->  (   \((>>) : IO U -> IO U -> IO U)
+>         ->  \(two   : Nat)
+>         ->  \(three : Nat)
+>         ->  \(four  : Nat)
+>         ->  \(five  : Nat)
+>         ->  \(six   : Nat)
+>         ->  \(seven : Nat)
+>         ->  \(eight : Nat)
+>         ->  \(nine  : Nat)
+>         ->  \(ten   : Nat)
+>         ->  (   \(replicateM_ : Nat -> IO U -> IO U)
+>             ->  \(ninetynine : Nat)
+>             ->  replicateM_ ninetynine ((>>=) String U getLine putStrLn)
+>             )
+> 
+>             -- replicateM_
+>             (   \(n : Nat)
+>             ->  \(io : IO U)
+>             ->  foldNat n (IO U) ((>>) io) (return U Unit)
+>             )
+> 
+>             -- ninetynine
+>             ((+) ((*) nine ten) nine)
+>         )
+> 
+>         -- (>>)
+>         (   \(m : IO U)
+>         ->  \(n : IO U)
+>         ->  (>>=) U U m (\(_ : U) -> n)
+>         )
+> 
+>         -- two
+>         ((+) one one)
+> 
+>         -- three
+>         ((+) one ((+) one one))
+> 
+>         -- four
+>         ((+) one ((+) one ((+) one one)))
+> 
+>         -- five
+>         ((+) one ((+) one ((+) one ((+) one one))))
+> 
+>         -- six
+>         ((+) one ((+) one ((+) one ((+) one ((+) one one)))))
+> 
+>         -- seven
+>         ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one one))))))
+> 
+>         -- eight
+>         ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one one)))))))
+>         -- nine
+>         ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one one))))))))
+> 
+>         -- ten
+>         ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one ((+) one one)))))))))
+>     )
+> 
+>     -- Nat
+>     (   forall (a : *)
+>     ->  (a -> a)
+>     ->  a
+>     ->  a
+>     )
+> 
+>     -- zero
+>     (   \(a : *)
+>     ->  \(Succ : a -> a)
+>     ->  \(Zero : a)
+>     ->  Zero
+>     )
+> 
+>     -- one
+>     (   \(a : *)
+>     ->  \(Succ : a -> a)
+>     ->  \(Zero : a)
+>     ->  Succ Zero
+>     )
+> 
+>     -- (+)
+>     (   \(m : forall (a : *) -> (a -> a) -> a -> a)
+>     ->  \(n : forall (a : *) -> (a -> a) -> a -> a)
+>     ->  \(a : *)
+>     ->  \(Succ : a -> a)
+>     ->  \(Zero : a)
+>     ->  m a Succ (n a Succ Zero)
+>     )
+> 
+>     -- (*)
+>     (   \(m : forall (a : *) -> (a -> a) -> a -> a)
+>     ->  \(n : forall (a : *) -> (a -> a) -> a -> a)
+>     ->  \(a : *)
+>     ->  \(Succ : a -> a)
+>     ->  \(Zero : a)
+>     ->  m a (n a Succ) Zero
+>     )
+> 
+>     -- foldNat
+>     (   \(n : forall (a : *) -> (a -> a) -> a -> a)
+>     ->  n
+>     )
+> 
+>     -- IO
+>     (   \(r : *)
+>     ->  forall (x : *)
+>     ->  (String -> x -> x)
+>     ->  ((String -> x) -> x)
+>     ->  (r -> x)
+>     ->  x
+>     )
+> 
+>     -- return
+>     (   \(a : *)
+>     ->  \(va : a)
+>     ->  \(x : *)
+>     ->  \(PutStrLn : String -> x -> x)
+>     ->  \(GetLine : (String -> x) -> x)
+>     ->  \(Return : a -> x)
+>     ->  Return va
+>     )
+> 
+>     -- (>>=)
+>     (   \(a : *)
+>     ->  \(b : *)
+>     ->  \(m : forall (x : *)
+>         ->  (String -> x -> x)
+>         ->  ((String -> x) -> x)
+>         ->  (a -> x)
+>         ->  x
+>         )
+>     ->  \(f : a
+>         ->  forall (x : *)
+>         -> (String -> x -> x)
+>         -> ((String -> x) -> x)
+>         -> (b -> x)
+>         -> x
+>         )
+>     ->  \(x : *)
+>     ->  \(PutStrLn : String -> x -> x)
+>     ->  \(GetLine : (String -> x) -> x)
+>     ->  \(Return : b -> x)
+>     ->  m x PutStrLn GetLine (\(va : a) -> f va x PutStrLn GetLine Return)
+>     )
+> 
+>     -- putStrLn
+>     (   \(str : String)
+>     ->  \(x : *)
+>     ->  \(PutStrLn : String -> x -> x  )
+>     ->  \(GetLine  : (String -> x) -> x)
+>     ->  \(Return   : U -> x)
+>     ->  PutStrLn str (Return Unit)
+>     )
+> 
+>     -- getLine
+>     (   \(x : *)
+>     ->  \(PutStrLn : String -> x -> x  )
+>     ->  \(GetLine  : (String -> x) -> x)
+>     ->  \(Return   : String -> x)
+>     -> GetLine Return
+>     )
+> )
+
+If you type-check and normalize this program, the compiler will produce an
+unrolled syntax tree representing a program that echoes 99 lines from standard
+input to standard output:
+
+> $ morte < recursive.mt
+> ∀(String : *) → ∀(U : *) → U → ∀(x : *) → (String → x → x) → ((String → x
+> ) → x) → (U → x) → x
+> λ(String : *) → λ(U : *) → λ(Unit : U) → λ(x : *) → λ(PutStrLn : String →
+>  x → x) → λ(GetLine : (String → x) → x) → λ(Return : U → x) → GetLine (λ(
+> va : String) → PutStrLn va (GetLine (λ(va@1 : String) → PutStrLn va@1 (Ge
+> tLine (λ(va@2 : String) → PutStrLn va@2 (GetLine (λ(va@3 : String) → PutS
+> trLn va@3 (...
+> <snip>
+> ... GetLine (λ(va@92 : String) → PutStrLn va@92 (GetLine (λ(va@93 : Strin
+> g) → PutStrLn va@93 (GetLine (λ(va@94 : String) → PutStrLn va@94 (GetLine
+>  (λ(va@95 : String) → PutStrLn va@95 (GetLine (λ(va@96 : String) → PutStr
+> Ln va@96 (GetLine (λ(va@97 : String) → PutStrLn va@97 (GetLine (λ(va@98 :
+>  String) → PutStrLn va@98 (Return Unit)))))))))))))))))))))))))))))))))))
+> )))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+> )))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+> )))))))))))))))))
+
+    This program can then be passed to a backend language which interprets the
+    syntax tree, translating @GetLine@ and @PutStrLn@ to read and write
+    commands.
+
+    Notice that although our program is built using the high-level @replicateM_@
+    function, you'd never be able to tell by looking at the optimized program.
+    By encoding effects as a free monad, we expose the monad laws to Morte,
+    which allows the normalizer to optimize away monadic abstractions like
+    @replicateM_@.
+-}
+
+{- $portability
+    You can use Morte as a standard format for transmitting code between
+    functional languages.  This requires you to encode the source language to
+    Morte and decode the Morte into the destination language.
+
+    If every functional language has a Morte encoder/decoder, then eventually
+    there can be a code utility analogous to @pandoc@ that converts code written
+    any of these languages to code written in any other of these language.
+
+    Additionally, Morte provides a standard `Data.Binary.Binary` interface that
+    you can use for serializing and deserializing code.  You may find this
+    useful for transmitting code between distributed services, even within
+    the same language.
 -}
