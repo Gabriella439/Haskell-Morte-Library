@@ -63,6 +63,8 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State (State, evalState, modify)
 import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(get, put), Get)
+import Data.Binary.Get (getWord64le)
+import Data.Binary.Put (putWord64le)
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.Monoid (mempty, (<>))
@@ -91,12 +93,14 @@ data Var = V Text Int deriving (Eq, Show)
 instance Binary Var where
     put (V txt n) = do
         put (Text.encodeUtf8 (Text.toStrict txt))
-        put n
+        putWord64le (fromIntegral n)
     get = do
         bs <- get
         case Text.decodeUtf8' bs of
-            Left  e   -> fail (show e)
-            Right txt -> V (Text.fromStrict txt) <$> get
+            Left  e   ->
+                fail (show e)
+            Right txt ->
+                V (Text.fromStrict txt) <$> fmap fromIntegral getWord64le
 
 instance IsString Var
   where
