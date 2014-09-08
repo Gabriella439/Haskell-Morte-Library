@@ -11,8 +11,10 @@ Bug-Reports: https://github.com/Gabriel439/Haskell-Morte-Library/issues
 Synopsis: Bare-bones calculus of constructions
 Description: Morte is a typed, purely functional, and strongly normalizing term
     rewriting system designed as an intermediate language for compilers.  Use
-    this library to type-check, normalize, parse, pretty-print, serialize and
+    this library to type-check, optimize, parse, pretty-print, serialize and
     deserialize expressions in this intermediate language.
+    .
+    Read "Morte.Tutorial" to learn how to use this library
 Category: Compiler
 Source-Repository head
     Type: git

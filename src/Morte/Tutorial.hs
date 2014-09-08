@@ -88,8 +88,11 @@ import Morte.Core
 > λ(a : *) → λ(x : a) → x
 > $
 
-    The second-to-last output line is the type of our program as computed by the
-    compiler.  Compare it with the equivalent Haskell type:
+    The compiler outputs two lines.  The first line is the type, which is output
+    to @stderr@.  The second line is the optimized program, which is output to
+    @stdout@.
+
+    Compare the type output by the compiler with the equivalent Haskell type:
 
 > -- Haskell
 > id :: a -> a
