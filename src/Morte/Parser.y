@@ -10,6 +10,7 @@ module Morte.Parser (
     -- * Errors
     prettyParseError,
     ParseError(..),
+    Position(..),
     ParseMessage(..)
     ) where
 
@@ -111,7 +112,7 @@ lexer k = do
 parseError :: Token -> Lex a
 parseError token = throwError (Parsing token)
 
--- | Parse an expression from `Text` or return a `ParseError` if parsing fails
+-- | Parse an `Expr` from `Text` or return a `ParseError` if parsing fails
 exprFromText :: Text -> Either ParseError Expr
 exprFromText text = case runState (runErrorT parseExpr) initialStatus of
     (x, (position, _)) -> case x of
@@ -122,11 +123,11 @@ exprFromText text = case runState (runErrorT parseExpr) initialStatus of
 
 -- | Structured type for parsing errors
 data ParseError = ParseError
-    { position :: Position
-    , message :: ParseMessage
+    { position     :: Position
+    , parseMessage :: ParseMessage
     } deriving (Show)
 
--- | Pretty-print a parsing error
+-- | Pretty-print a `ParseError`
 prettyParseError :: ParseError -> Text
 prettyParseError (ParseError (Lexer.P l c) e) = Builder.toLazyText (
         "Line:   " <> decimal l <> "\n"
