@@ -63,6 +63,12 @@ module Morte.Tutorial (
 
     -- * Portability
     -- $portability
+
+    -- * Dependent Types
+    -- $dependent
+
+    -- * Conclusion
+    -- $conclusion
     ) where
 
 import Morte.Core
@@ -1813,4 +1819,36 @@ input to standard output:
     you can use for serializing and deserializing code.  You may find this
     useful for transmitting code between distributed services, even within
     the same language.
+-}
+
+{- $dependent
+-}
+
+{- $conclusion
+    The primary purpose of Morte is a proof-of-concept that a non-recursive
+    calculus of constructions is the ideal system for the super-optimization of
+    functional programs.  Morte uses a simple, yet powerful, optimization
+    scheme that consists entirely of normalizing terms using the ordinary
+    reduction rules of lambda calculus.  Morte emphasizes pushing optimization
+    complexity out of the virtual machine and into the translation of
+    abstractions to the calculus of constructions.  However, that means that the
+    hard work has only just begun and Morte still needs front-end compilers to
+    translate from high-level functional languages to the calculus of
+    constructions.
+
+    The secondary purpose of Morte is to serve as a standardized format for
+    encoding and transmission of functional code between distributed services or
+    different functional languages.  Morte restricts itself to lambda calculus
+    in order to reuse the large body of research for translating programming
+    abstractions to and from the polymorphic lambda calculus.
+
+    Finally, you can use Morte as a equational reasoning engine to learn how
+    high-level abstractions reduce to low-level abstractions.  If you are
+    teaching lambda calculus you can use Morte as a teaching tool for how to
+    encode abstractions within lambda calculus.
+
+    If you have problems, questions, or feature requests, you can open an issue
+    on the issue tracker on Github:
+
+    <https://github.com/Gabriel439/Haskell-Morte-Library/issues>
 -}
