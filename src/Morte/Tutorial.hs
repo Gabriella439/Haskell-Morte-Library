@@ -1,9 +1,9 @@
 {-| Morte is a minimalist implementation of the calculus of constructions that
     comes with a parser, type-checker, optimizer, and pretty-printer.
 
-    You can think of Morte as a very low-level virtual machine for functional
-    languages.  This virtual machine was designed with the following design
-    principles, in descending order of importance:
+    You can think of Morte as a very low-level intermediate language for
+    functional languages.  This virtual machine was designed with the following
+    design principles, in descending order of importance:
 
     * Be super-optimizable - by disabling unrestricted recursion
 

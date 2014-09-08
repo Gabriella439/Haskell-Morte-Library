@@ -19,17 +19,19 @@
     * Equational reasoning preserves normal forms
 
 
-    Strong normalization comes at a price: Morte forbids recursion, which is
-    syntactically unrepresentable.  Instead, you must translate all recursion to
-    F-algebras and translate all corecursion to F-coalgebras.  If you are new to
-    F-(co)algebras then you may wish to read \"Recursive types for free!\":
+    Strong normalization comes at a price: Morte forbids recursion.  Instead,
+    you must translate all recursion to F-algebras and translate all corecursion
+    to F-coalgebras.  If you are new to F-(co)algebras then you may wish to read
+    "Morte.Tutorial" or read \"Recursive types for free!\":
 
     <http://homepages.inf.ed.ac.uk/wadler/papers/free-rectypes/free-rectypes.txt>
 
     Morte is designed to be a super-optimizing intermediate language with a
     simple optimization scheme.  You optimize a Morte expression by just
-    normalizing the expression.  If you normalize an F-coalgebra you get an
-    ordinary loop, and if you normalize an F-algebra you get an unrolled loop.
+    normalizing the expression.  If you normalize a long-lived program encoded
+    as an F-coalgebra you typically get a state machine, and if you normalize a
+    long-lived program encoded as an F-algebra you typically get an unrolled
+    loop.
 
     Strong normalization guarantees that all abstractions encodable in Morte are
     \"free\", meaning that they may increase your program's compile times but
@@ -241,9 +243,9 @@ data TypeMessage
 
 -- | A structured type error that includes context
 data TypeError = TypeError
-    { context :: Context
-    , current :: Expr
-    , message :: TypeMessage
+    { context     :: Context
+    , current     :: Expr
+    , typeMessage :: TypeMessage
     } deriving (Show, Typeable)
 
 instance Exception TypeError
@@ -471,7 +473,7 @@ normalize e = case e of
 
 {-| Pretty-print an expression
 
-    The result is syntactically valid Morte code
+    The result is a syntactically valid Morte program
 -}
 prettyExpr :: Expr -> Text
 prettyExpr = toLazyText . buildExpr
