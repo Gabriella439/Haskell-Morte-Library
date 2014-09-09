@@ -10,7 +10,6 @@ module Morte.Parser (
     -- * Errors
     prettyParseError,
     ParseError(..),
-    Position(..),
     ParseMessage(..)
     ) where
 

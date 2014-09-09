@@ -64,9 +64,6 @@ module Morte.Tutorial (
     -- * Portability
     -- $portability
 
-    -- * Dependent Types
-    -- $dependent
-
     -- * Conclusion
     -- $conclusion
     ) where
@@ -685,7 +682,7 @@ import Morte.Core
 > -- getName
 > (\(str : String) -> str)
 
-    That programs fails to type-check, giving the following error message:
+    That program fails to type-check, giving the following error message:
 
 > $ morte < newtype.mt
 > Context:
@@ -1039,6 +1036,8 @@ import Morte.Core
 
 > exists s . (s, s -> F s)
 
+    ... where @F@ is a strictly-positive functor.
+
     Once you F-coalgebra encode the @Stream@ type you can translate the type to
     Morte using the rules for existential quantification given in the previous
     section:
@@ -1239,9 +1238,8 @@ import Morte.Core
 > )
 
     Verify using the @morte@ library that those produce identical expressions.
-    For reference, they both generate the following type and optimized program
-    that loops over the list just once, applying @\'f\'@ and @\'g\'@ to every
-    value:
+    For reference, they both generate the following optimized program that loops
+    over the list just once, applying @\'f\'@ and @\'g\'@ to every value:
 
 > $ morte < mapcomp1.mt
 > ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (a → x → x) →
@@ -1467,9 +1465,9 @@ the generating step function:
     equal programs.  Here's an example of an equality that Morte does not
     currently detect (but might detect in the future):
 
-> \(k : forall (x : *) -> a -> x) -> k (f . g)
+> k : forall (x : *) -> (a -> x) -> x
 >
-> = f (k g)
+> k (f . g) = f (k g)
 
     This is an example of a free theorem: an equality that can be deduced purely
     from the type of @k@.  Morte may eventually use free theorems to further
@@ -1804,6 +1802,11 @@ input to standard output:
     By encoding effects as a free monad, we expose the monad laws to Morte,
     which allows the normalizer to optimize away monadic abstractions like
     @replicateM_@.
+
+    As an exercise, try implementing a corecursive syntax tree instead of a
+    recursive one, perhaps one that loops infinitely.  For such a syntax tree
+    the backend language could then step the corecursive syntax tree
+    indefinitely.
 -}
 
 {- $portability
@@ -1819,9 +1822,6 @@ input to standard output:
     you can use for serializing and deserializing code.  You may find this
     useful for transmitting code between distributed services, even within
     the same language.
--}
-
-{- $dependent
 -}
 
 {- $conclusion

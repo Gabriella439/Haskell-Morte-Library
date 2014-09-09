@@ -17,11 +17,11 @@ Description: Morte is a typed, purely functional, and strongly normalizing
     This library also installs an executable that you can use to type-check and
     optimize a @morte@ program.
     .
-    The "Morte" module is the recommended import for this library
-    .
     "Morte.Core" contains the core calculus of constructions for this language
     .
-    "Morte.Parser" contains the parser for the Morte language
+    "Morte.Lexer" contains the @alex@-generated lexer for Morte
+    .
+    "Morte.Parser" contains the @happy@-generated parser for Morte
     .
     Read "Morte.Tutorial" to learn how to use this library
 Category: Compiler
@@ -41,12 +41,10 @@ Library
         text                 >= 0.11.1.0 && < 1.2 ,
         transformers         >= 0.2.0.0  && < 0.5
     Exposed-Modules:
-        Morte,
         Morte.Core,
+        Morte.Lexer,
         Morte.Parser,
         Morte.Tutorial
-    Other-Modules:
-        Morte.Lexer
     Build-Tools: alex, happy
     GHC-Options: -O2
 
