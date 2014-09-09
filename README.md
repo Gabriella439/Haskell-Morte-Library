@@ -12,7 +12,7 @@ desugar to lambda abstraction.
 * Install the [Haskell Platform](http://www.haskell.org/platform/)
 * `cabal install morte`
 
-This creates the `morte` executable under `cabal`'s @bin@ directory.  This
+This creates the `morte` executable under `cabal`'s `bin` directory.  This
 executable reads Morte expressions from `stdin`, type-checks them, outputs their
 type to `stderr` and outputs the optimized program to `stdout`.  For example:
 
