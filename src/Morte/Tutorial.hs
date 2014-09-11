@@ -88,6 +88,7 @@ import Morte.Core
 > \(a : *) -> \(x : a) -> x <Enter>
 > <Ctrl-D>
 > ∀(a : *) → a → a
+> 
 > λ(a : *) → λ(x : a) → x
 > $
 
@@ -159,6 +160,7 @@ import Morte.Core
 
 > $ morte < id.mt
 > ∀(String : *) → String → String
+> 
 > λ(String : *) → λ(x : String) → x
 
     Morte optimizes our program to the identity function on @String@s, but if
@@ -320,6 +322,7 @@ import Morte.Core
 
 > $ morte < id2.mt
 > ∀(a : *) → a → a
+> 
 > λ(a : *) → λ(x : a) → x
 
 -}
@@ -510,6 +513,7 @@ import Morte.Core
 
 > $ morte < bool.mt
 > ∀(Int : *) → Int → Int → Int
+> 
 > λ(Int : *) → λ(Zero : Int) → λ(One : Int) → One
 
     The compiler reduces the program to @One@.  All the dead code has been
@@ -607,6 +611,7 @@ import Morte.Core
 
 > $ morte < pair.mt
 > ∀(a : *) → a → a → a
+> 
 > λ(a : *) → λ(x : a) → λ(y : a) → y
 
     This is also equal to our previous program.  Just rename @\'a\'@ to @Int@,
@@ -853,6 +858,7 @@ import Morte.Core
 
 > $ morte < all.mt
 > ∀(r : *) → r → r → r
+> 
 > λ(r : *) → λ(x : r) → λ(_ : r) → x
 
     Here's another example of encoding a recursive type, using natural numbers:
@@ -1083,6 +1089,7 @@ import Morte.Core
 
 > $ morte < mapid1.mt
 > ∀(a : *) → (∀(x : *) → (a → x → x) → x → x) → ∀(x : *) → (a → x → x) → x → x
+> 
 > λ(a : *) → λ(l : ∀(x : *) → (a → x → x) → x → x) → l
 
     We can prove this by replacing our @map@ with the identity function on
@@ -1117,6 +1124,7 @@ import Morte.Core
 
 > $ morte < mapid2.mt
 > ∀(a : *) → (∀(x : *) → (a → x → x) → x → x) → ∀(x : *) → (a → x → x) → x → x
+> 
 > λ(a : *) → λ(va : ∀(x : *) → (a → x → x) → x → x) → va
 
     However, we don't have to trust our fallible eyes.  We can enlist the
@@ -1244,6 +1252,7 @@ import Morte.Core
 > $ morte < mapcomp1.mt
 > ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (a → x → x) →
 >  x → x) → ∀(x : *) → (c → x → x) → x → x
+> 
 > λ(a : *) → λ(b : *) → λ(c : *) → λ(f : b → c) → λ(g : a → b) → λ(l : ∀(x : *) 
 > → (a → x → x) → x → x) → λ(x : *) → λ(Cons : c → x → x) → l x (λ(va : a) → Con
 > s (f (g va)))
@@ -1434,6 +1443,7 @@ corresponding to the identity function on @Stream@:
 > $ morte < corecursive.mt
 > ∀(a : *) → (∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) → x) →
 > x) → ∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) → x) → x
+> 
 > λ(a : *) → λ(st : ∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) 
 > → x) → x) → st
 
@@ -1445,6 +1455,7 @@ the generating step function:
 > ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (∀(s : *) → s
 >  → (s → ∀(x : *) → (a → s → x) → x) → x) → x) → ∀(x : *) → (∀(s : *) → s → (s 
 > → ∀(x : *) → (c → s → x) → x) → x) → x
+> 
 > λ(a : *) → λ(b : *) → λ(c : *) → λ(f : b → c) → λ(g : a → b) → λ(st : ∀(x : *)
 >  → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) → x) → x) → λ(x : *) → λ(S
 >  : ∀(s : *) → s → (s → ∀(x : *) → (c → s → x) → x) → x) → st x (λ(s : *) → λ(s
@@ -1780,6 +1791,7 @@ input to standard output:
 > $ morte < recursive.mt
 > ∀(String : *) → ∀(U : *) → U → ∀(x : *) → (String → x → x) → ((String → x
 > ) → x) → (U → x) → x
+> 
 > λ(String : *) → λ(U : *) → λ(Unit : U) → λ(x : *) → λ(PutStrLn : String →
 >  x → x) → λ(GetLine : (String → x) → x) → λ(Return : U → x) → GetLine (λ(
 > va : String) → PutStrLn va (GetLine (λ(va@1 : String) → PutStrLn va@1 (Ge
@@ -1964,6 +1976,7 @@ input to standard output:
 > $ morte < corecursive.mt
 > ∀(String : *) → ∀(r : *) → ∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (String 
 > → s → x) → ((String → s) → x) → (r → x) → x) → x) → x
+> 
 > λ(String : *) → λ(r : *) → λ(x : *) → λ(k : ∀(s : *) → s → (s → ∀(x : *) → (St
 > ring → s → x) → ((String → s) → x) → (r → x) → x) → x) → k (∀(x : *) → (String
 >  → x) → x → x) (λ(x : *) → λ(Just : String → x) → λ(Nothing : x) → Nothing) (λ
