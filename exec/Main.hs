@@ -1,5 +1,6 @@
 module Main where
 
+import Data.Monoid (mempty)
 import qualified Data.Text.Lazy.IO as Text
 import Morte.Core (typeOf, prettyTypeError, prettyExpr, normalize)
 import Morte.Parser (exprFromText, prettyParseError)
@@ -28,4 +29,5 @@ main = do
                 exitFailure
             Right typeExpr -> do
                 Text.hPutStrLn stderr (prettyExpr (normalize typeExpr))
+                Text.hPutStrLn stderr mempty
                 Text.putStrLn (prettyExpr (normalize expr))
