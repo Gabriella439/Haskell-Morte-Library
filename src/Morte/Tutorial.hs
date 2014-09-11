@@ -766,9 +766,9 @@ import Morte.Core
     that the final result is a list.
 
     Let's extend the @List@ example with the @Bool@ code to implement Haskell's
-    @any@ function and use it on an actual @List@ of @Bool@s:
+    @all@ function and use it on an actual @List@ of @Bool@s:
 
-> -- any.mt
+> -- all.mt
 >
 > -- let data Bool = True | False
 > --
@@ -851,7 +851,7 @@ import Morte.Core
     If you type-check and optimize the program, the compiler will statically
     evaluate the entire computation, reducing the program to @True@:
 
-> $ morte < any.mt
+> $ morte < all.mt
 > ∀(r : *) → r → r → r
 > λ(r : *) → λ(x : r) → λ(_ : r) → x
 

@@ -80,8 +80,6 @@ import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 
--- TODO: Include example use cases in module header
-
 {-| Label for a bound variable
 
     The `Text` field is the variable's name.
