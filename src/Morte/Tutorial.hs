@@ -619,14 +619,17 @@ import Morte.Core
 
     You can also import data types from whatever backend you use by accepting
     those types and functions on those types as explicit arguments to your
-    program.  For example, if you want to use machine integers and machine
-    arithmetic, then you can just parametrize your program on the integer type
-    and operations on that type:
+    program.  For example, if you want to use machine integers, hardware
+    arithmetic and integer literals, then you can just parametrize your program
+    on the type, operations, and literal values:
 
->     \(Int    : *)
-> ->  \((+)    : Int -> Int -> Int)
-> ->  \((*)    : Int -> Int -> Int)
->     ...
+>     \(Int    : *)                  -- Foreign type
+> ->  \((+)    : Int -> Int -> Int)  -- Foreign function
+> ->  \((*)    : Int -> Int -> Int)  -- Foreign function
+> ->  \(lit@0  : Int)                -- Foreign integer literal
+> ->  \(lit@1  : Int)                -- Foreign integer literal
+> ->  \(lit@2  : Int)                -- Foreign integer literal
+> ...
 
     However, the more types and operations you encode natively within Morte the
     more the optimizer can simplify your program.  This is because there is no
