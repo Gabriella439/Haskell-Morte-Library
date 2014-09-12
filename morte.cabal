@@ -8,7 +8,7 @@ Copyright: 2014 Gabriel Gonzalez
 Author: Gabriel Gonzalez
 Maintainer: Gabriel439@gmail.com
 Bug-Reports: https://github.com/Gabriel439/Haskell-Morte-Library/issues
-Synopsis: Bare-bones calculus of constructions
+Synopsis: A bare-bones calculus of constructions
 Description: Morte is a typed, purely functional, and strongly normalizing
     intermediate language designed for whole-program super-optimization.  Use
     this library to type-check, optimize, parse, pretty-print, serialize and
@@ -38,7 +38,7 @@ Library
         containers                          < 0.6 ,
         lens-family-core     >= 1.0.0    && < 1.2 ,
         pipes                >= 4.0.0    && < 4.2 ,
-        text                 >= 0.11.1.0 && < 1.2 ,
+        text                 >= 0.11.1.0 && < 1.3 ,
         transformers         >= 0.2.0.0  && < 0.5
     Exposed-Modules:
         Morte.Core,
@@ -55,4 +55,4 @@ Executable morte
         base                 >= 4        && < 5   ,
         morte                                     ,
         optparse-applicative                < 0.11,
-        text                 >= 0.11.1.0 && < 1.2  
+        text                 >= 0.11.1.0 && < 1.3
