@@ -20,11 +20,12 @@ type to `stderr` and outputs the optimized program to `stdout`.  For example:
     \(a : *) -> \(x : a) -> x <Enter>
     <Ctrl-D>
     ∀(a : *) → a → a
+    
     λ(a : *) → λ(x : a) → x
     $ # There was nothing to optimize
 
 To learn more, read the
-[Morte tutorial](http://hackage.haskell.org/packages/archive/morte/1.0.0/doc/html/Morte-Tutorial.html).
+[Morte tutorial](http://hackage.haskell.org/packages/archive/morte/1.0.1/doc/html/Morte-Tutorial.html).
 
 ## How to contribute
 
