@@ -53,8 +53,8 @@ import Pipes (Producer, hoist, lift, next)
 
 Expr :: { Expr }
      : BExpr                                   { $1           }
-     | '\\'  '(' VExpr ':' Expr ')' '->' Expr  { Lam $3 $5 $8 }
-     | '|~|' '(' VExpr ':' Expr ')' '->' Expr  { Pi  $3 $5 $8 }
+     | '\\'  '(' label ':' Expr ')' '->' Expr  { Lam $3 $5 $8 }
+     | '|~|' '(' label ':' Expr ')' '->' Expr  { Pi  $3 $5 $8 }
      | BExpr '->' Expr                         { Pi "_" $1 $3 }
 
 VExpr :: { Var }
