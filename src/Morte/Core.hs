@@ -110,7 +110,7 @@ import Data.Word (Word8)
     Zero indices are omitted when pretty-printing `Var`s and non-zero indices
     appear as a numeric suffix.
 -}
-data Var = V Text !Int deriving (Eq, Show)
+data Var = V Text Int deriving (Eq, Show)
 
 putUtf8 :: Text -> Put
 putUtf8 txt = put (Text.encodeUtf8 (Text.toStrict txt))
@@ -386,18 +386,21 @@ subst :: Var -> Expr -> Expr -> Expr
 subst v@(V x n) e0 = go
   where
     go e = case e of
-        Lam x' _A  b -> v' `seq` Lam x' (go _A)  b'
+        Lam x' _A  b -> n' `seq` Lam x' (go _A)  b'
           where
-            v'  = if x == x' then V x (n + 1) else v
+            n'  = if x == x' then n + 1 else n
+            v'  = V x n'
             b'  = subst v' (shift 1 (V x' 0) e0)  b
-        Pi  x' _A _B -> v' `seq` Pi  x' (go _A) _B'
+        Pi  x' _A _B -> n' `seq` Pi  x' (go _A) _B'
           where
-            v'  = if x == x' then V x (n + 1) else v
+            n'  = if x == x' then n + 1 else n
+            v'  = V x n'
             _B' = subst v' (shift 1 (V x' 0) e0) _B
         App f a     -> App (go f) (go a)
         Var v'      -> if v == v' then e0 else e
         Const _     -> e
 
+-- | @shift n (V x 0)@ adds @n@ to all free variables named @x@ within an `Expr`
 shift :: Int -> Var -> Expr -> Expr
 shift d (V x c) e0 = go e0
   where
