@@ -80,11 +80,35 @@ import Data.Word (Word8)
 
 {-| Label for a bound variable
 
-    The `Text` field is the variable's name.
+    The `Text` field is the variable's name (i.e. \"@x@\").
 
-    The `Int` field disambiguates variables with the same name.  Zero is a good
-    default.  Non-zero values will appear as a numeric suffix when
-    pretty-printing the `Var`.
+    The `Int` field disambiguates variables with the same name if there are
+    multiple bound variables in scope.  Zero refers to the nearest bound
+    variable and the index increases by one for each bound variable of the
+    same name going outward.  The following diagram may help:
+
+>                           +-refers to-+
+>                           |           |
+>                           v           |
+> \(x : *) -> \(y : *) -> \(x : *) -> x@0
+>
+>   +-------------refers to-------------+
+>   |                                   |
+>   v                                   |
+> \(x : *) -> \(y : *) -> \(x : *) -> x@1
+
+    This `Int` behaves like a De Bruijn index in the special case where all
+    variables have the same name.
+
+    You can optionally omit the index if it is @0@:
+
+>                           +refers to+
+>                           |         |
+>                           v         |
+> \(x : *) -> \(y : *) -> \(x : *) -> x
+
+    Zero indices are omitted when pretty-printing `Var`s and non-zero indices
+    appear as a numeric suffix.
 -}
 data Var = V Text !Int deriving (Eq, Show)
 
@@ -236,10 +260,9 @@ instance IsString Expr
 
 {-| Bound variable names and their types
 
-    Variable names may appear more than once in the list.  The index associated
-    with each `Var` disambiguates between duplicate names: an index of @n@
-    indicates to select the @nth@ occurrence of that variable name from the
-    `Context` (using 0-based numbering)
+    Variable names may appear more than once in the `Context`.  The `Var` @x\@n@
+    refers to the @n@th occurrence of @x@ in the `Context` (using 0-based
+    numbering).
 -}
 type Context = [(Text, Expr)]
 
