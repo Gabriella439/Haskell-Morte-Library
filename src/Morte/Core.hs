@@ -284,7 +284,7 @@ buildExpr = go False False
             <>  "λ("
             <>  fromLazyText x
             <>  " : "
-            <>  go False False _A 
+            <>  go False False _A
             <>  ") → "
             <>  go False False b
             <>  (if parenBind then ")" else "")
@@ -424,7 +424,7 @@ typeWith ctx e = case e of
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e NotAFunction)
         _A' <- typeWith ctx a
-        let nf_A  = normalize _A 
+        let nf_A  = normalize _A
             nf_A' = normalize _A'
         if nf_A == nf_A'
             then do
@@ -491,7 +491,7 @@ normalize e = case e of
     App f a     -> case normalize f of
         Lam x _A b -> normalize (shift b' (-1) v)  -- Beta reduce
           where
-            v  = V x 0 
+            v  = V x 0
             a' = shift a 1 v
             b' = subst v a' b
         f'         -> App f' (normalize a)
