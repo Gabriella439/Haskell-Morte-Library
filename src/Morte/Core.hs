@@ -427,8 +427,13 @@ typeWith ctx e = case e of
         let nf_A  = normalize _A 
             nf_A' = normalize _A'
         if nf_A == nf_A'
-            then return (subst (V x 0) a _B)
+            then do
+                let v   = V x 0
+                    a'  = shift a 1 v
+                    _B' = subst v a' _B
+                return (shift _B' (-1) v)
             else Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
+
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
