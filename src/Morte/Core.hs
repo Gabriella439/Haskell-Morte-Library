@@ -207,12 +207,12 @@ instance Binary Expr where
             put x
         Lam x _A b -> do
             put (2 :: Word8)
-            put (Text.encodeUtf8 (Text.toStrict x))
+            putUtf8 x
             put _A
             put b
         Pi  x _A _B -> do
             put (3 :: Word8)
-            put (Text.encodeUtf8 (Text.toStrict x))
+            putUtf8 x
             put _A
             put _B
         App f a     -> do
