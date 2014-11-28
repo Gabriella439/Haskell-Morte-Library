@@ -308,10 +308,10 @@ buildExpr = go False False
         go' e = case e of
             Var v' | v == v'   -> True
                    | otherwise -> False
-            Lam x' _A b         -> go' _A || used (V x n') b
+            Lam x' _A b         -> n' `seq` (go' _A || used (V x n') b)
               where
                 n' = if x == x' then n + 1 else n
-            Pi  x' _A b         -> go' _A || used (V x n') b
+            Pi  x' _A b         -> n' `seq` (go' _A || used (V x n') b)
               where
                 n' = if x == x' then n + 1 else n
             App f a            -> go' f || go' a
@@ -363,28 +363,30 @@ subst :: Var -> Expr -> Expr -> Expr
 subst v@(V x n) e0 = go
   where
     go e = case e of
-        Lam x' _A  b -> Lam x' (go _A)  b'
+        Lam x' _A  b -> v' `seq` Lam x' (go _A)  b'
           where
             v'  = if x == x' then V x (n + 1) else v
-            b'  = subst v' (shift e0 1 (V x' 0))  b
-        Pi  x' _A _B -> Pi  x' (go _A) _B'
+            b'  = subst v' (shift 1 (V x' 0) e0)  b
+        Pi  x' _A _B -> v' `seq` Pi  x' (go _A) _B'
           where
             v'  = if x == x' then V x (n + 1) else v
-            _B' = subst v' (shift e0 1 (V x' 0)) _B
+            _B' = subst v' (shift 1 (V x' 0) e0) _B
         App f a     -> App (go f) (go a)
         Var v'      -> if v == v' then e0 else e
         Const _     -> e
 
-shift :: Expr -> Int -> Var -> Expr
-shift e0 d (V x c) = go e0
+shift :: Int -> Var -> Expr -> Expr
+shift d (V x c) e0 = go e0
   where
     go e = case e of
-        Lam x' _A  b  -> Lam x' (go _A)  b'
+        Lam x' _A  b  -> c' `seq` Lam x' (go _A)  b'
           where
-            b'  = if x == x' then shift  b d $! V x (c + 1) else go  b
-        Pi  x' _A _B  -> Pi  x' (go _A) _B'
+            c'  = c + 1
+            b'  = if x == x' then shift d (V x c') b else go  b
+        Pi  x' _A _B  -> c' `seq` Pi  x' (go _A) _B'
           where
-            _B' = if x == x' then shift _B d $! V x (c + 1) else go _B
+            c'  = c + 1
+            _B' = if x == x' then shift d (V x c') _B else go _B
         App f a       -> App (go f) (go a)
         Var (V x' c') -> if x == x' && c' >= c then Var (V x' (c' + d)) else e
         Const _       -> e
@@ -427,9 +429,9 @@ typeWith ctx e = case e of
         if _A == _A'
             then do
                 let v   = V x 0
-                    a'  = shift a 1 v
+                    a'  = shift 1 v a
                     _B' = subst v a' _B
-                return (shift _B' (-1) v)
+                return (shift (-1) v _B')
             else do
                 let nf_A  = normalize _A
                     nf_A' = normalize _A'
@@ -446,10 +448,10 @@ typeOf = typeWith []
 whnf :: Expr -> Expr
 whnf e = case e of
     App f a -> case whnf f of
-        Lam x _A b -> whnf (shift b' (-1) v)  -- Beta reduce
+        Lam x _A b -> whnf (shift (-1) v b')  -- Beta reduce
           where
             v  = V x 0
-            a' = shift a 1 v
+            a' = shift 1 v a
             b' = subst v a' b
         _          -> e
     _       -> e
@@ -460,9 +462,13 @@ freeIn v@(V x n) = go
   where
     go e = case e of
         Lam x' _A b  ->
-            go _A || (if x == x' then freeIn (V x (n + 1)) else go) b
+            n' `seq` (go _A || if x == x' then freeIn (V x n')  b else go  b)
+          where
+            n' = n + 1
         Pi  x' _A _B ->
-            go _A || (if x == x' then freeIn (V x (n + 1)) else go) _B
+            n' `seq` (go _A || if x == x' then freeIn (V x n') _B else go _B)
+          where
+            n' = n + 1
         Var v'      -> v == v'
         App f a     -> go f || go a
         Const _     -> False
@@ -489,10 +495,10 @@ normalize e = case e of
         e' = Lam x (normalize _A) b'
     Pi  x _A _B -> Pi x (normalize _A) (normalize _B)
     App f a     -> case normalize f of
-        Lam x _A b -> normalize (shift b' (-1) v)  -- Beta reduce
+        Lam x _A b -> normalize (shift (-1) v b')  -- Beta reduce
           where
             v  = V x 0
-            a' = shift a 1 v
+            a' = shift 1 v a
             b' = subst v a' b
         f'         -> App f' (normalize a)
     Var   _    -> e
