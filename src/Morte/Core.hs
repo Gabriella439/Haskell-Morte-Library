@@ -510,8 +510,10 @@ normalize :: Expr -> Expr
 normalize e = case e of
     Lam x _A b -> case b' of
         App f a -> case a of
-            Var v' | v == v' && not (v `freeIn` f) -> f  -- Eta reduce
-                   | otherwise                     -> e'
+            Var v' | v == v' && not (v `freeIn` f) ->
+                shift (-1) (V x 0) f  -- Eta reduce
+                   | otherwise                     ->
+                e'
               where
                 v = V x 0
             _                                      -> e'
