@@ -424,16 +424,16 @@ typeWith ctx e = case e of
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e NotAFunction)
         _A' <- typeWith ctx a
-        let nf_A  = normalize _A
-            nf_A' = normalize _A'
-        if nf_A == nf_A'
+        if _A == _A'
             then do
                 let v   = V x 0
                     a'  = shift a 1 v
                     _B' = subst v a' _B
                 return (shift _B' (-1) v)
-            else Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
-
+            else do
+                let nf_A  = normalize _A
+                    nf_A' = normalize _A'
+                Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
