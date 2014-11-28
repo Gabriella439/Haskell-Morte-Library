@@ -186,11 +186,11 @@ data Expr
     deriving (Show)
 
 lookupN :: Eq a => a -> [(a, b)] -> Int -> Maybe b
-lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs' n
+lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
                             | n >  0    = lookupN a abs' $! n - 1
                             | n == 0    = Just b'
                             | otherwise = Nothing
-lookupN _  []            _             = Nothing
+lookupN _  []             _            = Nothing
 
 lookupCtx :: Var -> Context -> Maybe Expr
 lookupCtx (V x n) ctx = lookupN x ctx n
