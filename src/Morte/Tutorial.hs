@@ -623,12 +623,12 @@ import Morte.Core
     arithmetic and integer literals, then you can just parametrize your program
     on the type, operations, and literal values:
 
->     \(Int    : *)                  -- Foreign type
-> ->  \((+)    : Int -> Int -> Int)  -- Foreign function
-> ->  \((*)    : Int -> Int -> Int)  -- Foreign function
-> ->  \(lit@0  : Int)                -- Foreign integer literal
-> ->  \(lit@1  : Int)                -- Foreign integer literal
-> ->  \(lit@2  : Int)                -- Foreign integer literal
+>     \(Int  : *)                  -- Foreign type
+> ->  \((+)  : Int -> Int -> Int)  -- Foreign function
+> ->  \((*)  : Int -> Int -> Int)  -- Foreign function
+> ->  \(litA : Int)                -- Foreign integer literal
+> ->  \(litB : Int)                -- Foreign integer literal
+> ->  \(litC : Int)                -- Foreign integer literal
 > ...
 
     However, the more types and operations you encode natively within Morte the
@@ -806,7 +806,7 @@ import Morte.Core
 >     )
 > 
 >     -- (&&)
->     (\(b@1 : Bool) -> \(b@2 : Bool) -> if b@1 Bool b@2 False)
+>     (\(x : Bool) -> \(y : Bool) -> if x Bool y False)
 > 
 >     -- bools
 >     (Cons Bool True (Cons Bool True (Cons Bool True (Nil Bool))))
@@ -1263,6 +1263,8 @@ import Morte.Core
     We can also prove @map@ fusion for corecursive streams as well.  Just use
     the following program:
 
+> -- corecursive.mt
+>
 > -- first :: (a -> b) -> (a, c) -> (b, c)
 > -- first f (va, vb) = (f va, vb) 
 > -- 
@@ -1271,21 +1273,21 @@ import Morte.Core
 > -- map :: (a -> b) -> Stream a -> Stream b
 > -- map f (Cons (va, s)) = Cons (first f (va, map f s))
 > -- 
-> -- -- example1 = example2
+> -- -- exampleA = exampleB
 > -- 
-> -- example1 :: Stream a -> Stream a
-> -- example1 = map id
+> -- exampleA :: Stream a -> Stream a
+> -- exampleA = map id
 > -- 
-> -- example2 :: Stream a -> Stream a
-> -- example2 = id
+> -- exampleB :: Stream a -> Stream a
+> -- exampleB = id
 > -- 
-> -- -- example3 = example4
+> -- -- exampleC = exampleD
 > -- 
-> -- example3 :: (b -> c) -> (a -> b) -> Stream a -> Stream c
-> -- example3 f g = map (f . g)
+> -- exampleC :: (b -> c) -> (a -> b) -> Stream a -> Stream c
+> -- exampleC f g = map (f . g)
 > -- 
-> -- example4 :: (b -> c) -> (a -> b) -> Stream a -> Stream c
-> -- example4 f g = map f . map g
+> -- exampleD :: (b -> c) -> (a -> b) -> Stream a -> Stream c
+> -- exampleD f g = map f . map g
 > 
 > (   \(id : forall (a : *) -> a -> a)
 > ->  \(  (.)
@@ -1316,12 +1318,12 @@ import Morte.Core
 >         ->  Stream b
 >         )
 > 
->         -- example@1 = example@2
->     ->  (   \(example@1 : forall (a : *) -> Stream a -> Stream a)
->         ->  \(example@2 : forall (a : *) -> Stream a -> Stream a)
+>         -- exampleA = exampleB
+>     ->  (   \(exampleA : forall (a : *) -> Stream a -> Stream a)
+>         ->  \(exampleB : forall (a : *) -> Stream a -> Stream a)
 > 
->         -- example@3 = example@4
->         ->  \(  example@3
+>         -- exampleC = exampleD
+>         ->  \(  exampleC
 >             :   forall (a : *)
 >             ->  forall (b : *)
 >             ->  forall (c : *)
@@ -1331,7 +1333,7 @@ import Morte.Core
 >             ->  Stream c
 >             )
 > 
->         ->  \(  example@4
+>         ->  \(  exampleD
 >             :   forall (a : *)
 >             ->  forall (b : *)
 >             ->  forall (c : *)
@@ -1342,19 +1344,19 @@ import Morte.Core
 >             )
 > 
 >         -- Uncomment the example you want to test
->         ->  example@1
-> --      ->  example@2
-> --      ->  example@3
-> --      ->  example@4
+>         ->  exampleA
+> --      ->  exampleB
+> --      ->  exampleC
+> --      ->  exampleD
 >         )
 > 
->         -- example@1
+>         -- exampleA
 >         (\(a : *) -> map a a (id a))
 >   
->         -- example@2
+>         -- exampleB
 >         (\(a : *) -> id (Stream a))
 > 
->         -- example@3
+>         -- exampleC
 >         (   \(a : *)
 >         ->  \(b : *)
 >         ->  \(c : *)
@@ -1363,7 +1365,7 @@ import Morte.Core
 >         ->  map a c ((.) a b c f g)
 >         )
 > 
->         --  example@4
+>         --  exampleD
 >         (   \(a : *)
 >         ->  \(b : *)
 >         ->  \(c : *)
@@ -1397,7 +1399,7 @@ import Morte.Core
 >         ->  S
 >             s
 >             seed
->             (\(seed@1 : s) -> first a b s f (step seed@1))
+>             (\(seed : s) -> first a b s f (step seed))
 >         )
 >     )
 > )
@@ -1438,10 +1440,9 @@ import Morte.Core
 > ->  \(Pair : b -> c -> x)
 > ->  p x (\(va : a) -> \(vc : c) -> Pair (f va) vc)
 > )
-> 
 
-Both @example\@1@ and @example\@2@ generate identical optimized expressions,
-corresponding to the identity function on @Stream@:
+    Both @exampleA@ and @exampleB@ generate identical optimized expressions,
+    corresponding to the identity function on @Stream@:
 
 > $ morte < corecursive.mt
 > ∀(a : *) → (∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) → x) →
@@ -1450,9 +1451,9 @@ corresponding to the identity function on @Stream@:
 > λ(a : *) → λ(st : ∀(x : *) → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) 
 > → x) → x) → st
 
-Similarly, both @example\@3@ and @example\@4@ generate identical optimized
-expressions, corresponding to applying @f@ and @g@ to every value emitted by
-the generating step function:
+    Similarly, both @exampleC@ and @exampleD@ generate identical optimized
+    expressions, corresponding to applying @f@ and @g@ to every value emitted by
+    the generating step function:
 
 > $ morte < corecursive.mt
 > ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (∀(s : *) → s
@@ -1462,9 +1463,8 @@ the generating step function:
 > λ(a : *) → λ(b : *) → λ(c : *) → λ(f : b → c) → λ(g : a → b) → λ(st : ∀(x : *)
 >  → (∀(s : *) → s → (s → ∀(x : *) → (a → s → x) → x) → x) → x) → λ(x : *) → λ(S
 >  : ∀(s : *) → s → (s → ∀(x : *) → (c → s → x) → x) → x) → st x (λ(s : *) → λ(s
-> eed : s) → λ(step : s → ∀(x : *) → (a → s → x) → x) → S s seed (λ(seed@1 : s) 
-> → λ(x : *) → λ(Pair : c → s → x) → step seed@1 x (λ(va : a) → Pair (f (g va)))
-> ))
+> eed : s) → λ(step : s → ∀(x : *) → (a → s → x) → x) → S s seed (λ(seed : s) → 
+> λ(x : *) → λ(Pair : c → s → x) → step seed x (λ(va : a) → Pair (f (g va)))))
 
 -}
 
@@ -1795,20 +1795,21 @@ input to standard output:
 > ∀(String : *) → ∀(U : *) → U → ∀(x : *) → (String → x → x) → ((String → x
 > ) → x) → (U → x) → x
 > 
-> λ(String : *) → λ(U : *) → λ(Unit : U) → λ(x : *) → λ(PutStrLn : String →
->  x → x) → λ(GetLine : (String → x) → x) → λ(Return : U → x) → GetLine (λ(
-> va : String) → PutStrLn va (GetLine (λ(va@1 : String) → PutStrLn va@1 (Ge
-> tLine (λ(va@2 : String) → PutStrLn va@2 (GetLine (λ(va@3 : String) → PutS
-> trLn va@3 (...
+> λ(String : *) → λ(U : *) → λ(Unit : U) → λ(x : *) → λ(PutStrLn : String → x → 
+> x) → λ(GetLine : (String → x) → x) → λ(Return : U → x) → GetLine (λ(va : Strin
+> g) → PutStrLn va (GetLine (λ(va : String) → PutStrLn va (GetLine (λ(va : Strin
+> g) → PutStrLn va (GetLine (λ(va : String) → PutStrLn va (GetLine (λ(va : Strin
+> g) → PutStrLn va (GetLine (λ(va : String) → PutStrLn va (GetLine (λ(va : Strin
+> g) → PutStrLn va (GetLine (λ(va : String) → PutStrLn va (GetLine (λ(va : Strin
+> ...
 > <snip>
-> ... GetLine (λ(va@92 : String) → PutStrLn va@92 (GetLine (λ(va@93 : Strin
-> g) → PutStrLn va@93 (GetLine (λ(va@94 : String) → PutStrLn va@94 (GetLine
->  (λ(va@95 : String) → PutStrLn va@95 (GetLine (λ(va@96 : String) → PutStr
-> Ln va@96 (GetLine (λ(va@97 : String) → PutStrLn va@97 (GetLine (λ(va@98 :
->  String) → PutStrLn va@98 (Return Unit)))))))))))))))))))))))))))))))))))
-> )))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
-> )))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
-> )))))))))))))))))
+> ...
+> g) → PutStrLn va (GetLine (λ(va : String) → PutStrLn va (GetLine (λ(va : Strin
+> g) → PutStrLn va (GetLine (λ(va : String) → PutStrLn va (GetLine (λ(va : Strin
+> g) → PutStrLn va (GetLine (λ(va : String) → PutStrLn va (Return Unit))))))))))
+> ))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+> ))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+> ))))))))))))))))))))))))))))))))
 
     This program can then be passed to a backend language which interprets the
     syntax tree, translating @GetLine@ and @PutStrLn@ to read and write

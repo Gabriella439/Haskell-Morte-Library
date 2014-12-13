@@ -64,11 +64,9 @@ import Control.Applicative ((<$>), (<*>))
 import Control.Exception (Exception)
 import Control.Monad.Trans.State (State, evalState, modify)
 import qualified Control.Monad.Trans.State as State
-import Data.Binary (Binary(get, put), Get)
+import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
 import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
 import Data.Text ()  -- For the `IsString` instance
@@ -82,25 +80,53 @@ import Data.Word (Word8)
 
 {-| Label for a bound variable
 
-    The `Text` field is the variable's name.
+    The `Text` field is the variable's name (i.e. \"@x@\").
 
-    The `Int` field disambiguates variables with the same name.  Zero is a good
-    default.  Non-zero values will appear as a numeric suffix when
-    pretty-printing the `Var`.
+    The `Int` field disambiguates variables with the same name if there are
+    multiple bound variables in scope.  Zero refers to the nearest bound
+    variable and the index increases by one for each bound variable of the
+    same name going outward.  The following diagram may help:
+
+>                           +-refers to-+
+>                           |           |
+>                           v           |
+> \(x : *) -> \(y : *) -> \(x : *) -> x@0
+>
+>   +-------------refers to-------------+
+>   |                                   |
+>   v                                   |
+> \(x : *) -> \(y : *) -> \(x : *) -> x@1
+
+    This `Int` behaves like a De Bruijn index in the special case where all
+    variables have the same name.
+
+    You can optionally omit the index if it is @0@:
+
+>                           +refers to+
+>                           |         |
+>                           v         |
+> \(x : *) -> \(y : *) -> \(x : *) -> x
+
+    Zero indices are omitted when pretty-printing `Var`s and non-zero indices
+    appear as a numeric suffix.
 -}
 data Var = V Text Int deriving (Eq, Show)
 
+putUtf8 :: Text -> Put
+putUtf8 txt = put (Text.encodeUtf8 (Text.toStrict txt))
+
+getUtf8 :: Get Text
+getUtf8 = do
+    bs <- get
+    case Text.decodeUtf8' bs of
+        Left  e   -> fail (show e)
+        Right txt -> return (Text.fromStrict txt)
+
 instance Binary Var where
-    put (V txt n) = do
-        put (Text.encodeUtf8 (Text.toStrict txt))
+    put (V x n) = do
+        putUtf8 x
         putWord64le (fromIntegral n)
-    get = do
-        bs <- get
-        case Text.decodeUtf8' bs of
-            Left  e   ->
-                fail (show e)
-            Right txt ->
-                V (Text.fromStrict txt) <$> fmap fromIntegral getWord64le
+    get = V <$> getUtf8 <*> fmap fromIntegral getWord64le
 
 instance IsString Var
   where
@@ -151,25 +177,34 @@ data Expr
     --   > Var (V x n)    ~  x@n
     | Var Var
     -- | > Lam x     A b  ~  λ(x : A) → b
-    | Lam Var Expr Expr
+    | Lam Text Expr Expr
     -- | > Pi x      A B  ~  ∀(x : A) → B
     --   > Pi unused A B  ~        A  → B
-    | Pi  Var Expr Expr
+    | Pi  Text Expr Expr
     -- | > App f a        ~  f a
     | App Expr Expr
     deriving (Show)
 
+lookupN :: Eq a => a -> [(a, b)] -> Int -> Maybe b
+lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
+                            | n >  0    = lookupN a abs' $! n - 1
+                            | n == 0    = Just b'
+                            | otherwise = Nothing
+lookupN _  []             _            = Nothing
+
+lookupCtx :: Var -> Context -> Maybe Expr
+lookupCtx (V x n) ctx = lookupN x ctx n
+
 instance Eq Expr where
     eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
       where
-        go :: Expr -> Expr -> State [(Var, Var)] Bool
+        go :: Expr -> Expr -> State [(Text, Text)] Bool
         go (Const cL) (Const cR) = return (cL == cR)
-        go (Var xL) (Var xR) = do
+        go (Var (V xL nL)) (Var (V xR nR)) = do
             ctx <- State.get
-            let x = case lookup xL ctx of
-                    Nothing  -> xL
-                    Just xR' -> xR'
-            return (x == xR)
+            return (nL == nR && case lookupN xL ctx nL of
+                    Nothing  -> xL  == xR
+                    Just xR' -> xR' == xR )
         go (Lam xL tL bL) (Lam xR tR bR) = do
             modify ((xL, xR):)
             eq1 <- go tL tR
@@ -196,12 +231,12 @@ instance Binary Expr where
             put x
         Lam x _A b -> do
             put (2 :: Word8)
-            put x
+            putUtf8 x
             put _A
             put b
         Pi  x _A _B -> do
             put (3 :: Word8)
-            put x
+            putUtf8 x
             put _A
             put _B
         App f a     -> do
@@ -214,8 +249,8 @@ instance Binary Expr where
         case n of
             0 -> Const <$> get
             1 -> Var <$> get
-            2 -> Lam <$> get <*> get <*> get
-            3 -> Pi  <$> get <*> get <*> get
+            2 -> Lam <$> getUtf8 <*> get <*> get
+            3 -> Pi  <$> getUtf8 <*> get <*> get
             4 -> App <$> get <*> get
             _ -> fail "get Expr: Invalid tag byte"
 
@@ -223,11 +258,13 @@ instance IsString Expr
   where
     fromString str = Var (fromString str)
 
-{-| Bound variables and their types
+{-| Bound variable names and their types
 
-    Earlier `Var`s shadow later matching `Var`s
+    Variable names may appear more than once in the `Context`.  The `Var` @x\@n@
+    refers to the @n@th occurrence of @x@ in the `Context` (using 0-based
+    numbering).
 -}
-type Context = [(Var, Expr)]
+type Context = [(Text, Expr)]
 
 -- | The specific type error
 data TypeMessage
@@ -268,16 +305,17 @@ buildExpr = go False False
         Lam x _A b ->
                 (if parenBind then "(" else "")
             <>  "λ("
-            <>  buildVar x
+            <>  fromLazyText x
             <>  " : "
-            <>  go False False _A 
+            <>  go False False _A
             <>  ") → "
             <>  go False False b
             <>  (if parenBind then ")" else "")
         Pi  x _A b ->
                 (if parenBind then "(" else "")
-            <>  (if used x e
-                 then "∀(" <> buildVar x <> " : " <> go False False _A <> ")"
+            <>  (if used (V x 0) b
+                 then
+                     "∀(" <> fromLazyText x <> " : " <> go False False _A <> ")"
                  else go True False _A )
             <>  " → "
             <>  go False False b
@@ -288,13 +326,17 @@ buildExpr = go False False
             <>  (if parenApp then ")" else "")
 
     used :: Var -> Expr -> Bool
-    used x = go'
+    used v@(V x n) = go'
       where
         go' e = case e of
-            Var x' | x == x'   -> True
+            Var v' | v == v'   -> True
                    | otherwise -> False
-            Lam _ _A b         -> go' _A || go' b
-            Pi  _ _A b         -> go' _A || go' b
+            Lam x' _A b         -> n' `seq` (go' _A || used (V x n') b)
+              where
+                n' = if x == x' then n + 1 else n
+            Pi  x' _A b         -> n' `seq` (go' _A || used (V x n') b)
+              where
+                n' = if x == x' then n + 1 else n
             App f a            -> go' f || go' a
             Const _            -> False
 
@@ -330,52 +372,50 @@ buildTypeError (TypeError ctx expr msg)
     <>  "\n"
     <>  buildTypeMessage msg
   where
-    buildKV (key, val) = buildVar key <> " : " <> buildExpr val
+    buildKV (key, val) = fromLazyText key <> " : " <> buildExpr val
 
     buildContext =
         (fromLazyText . Text.unlines . map (toLazyText . buildKV) . reverse) ctx
 
 
-{-| Find all free variables with a given label and return their `Int`s
-
-    Use this to generate a new variable which does not clash with existing free
-    variables
--}
-freeOf :: Text -> Expr -> IntSet
-freeOf txt = go
-  where
-    go e = case e of
-        Var (V txt' n) | txt == txt' -> IntSet.singleton n
-                       | otherwise   -> IntSet.empty
-        Lam (V _ n   )  _ b          -> IntSet.delete n (go b)
-        Pi  (V _ n   )  _ b          -> IntSet.delete n (go b)
-        App f a                      -> IntSet.union (go f) (go a)
-        Const _                      -> IntSet.empty
-
 {-| Substitute all occurrences of a variable with an expression
 
-> subst x C B  ~  B[x := C]
+> subst v C B  ~  B[v := C]
 -}
 subst :: Var -> Expr -> Expr -> Expr
-subst x0 e0 = go
+subst v@(V x n) e0 = go
   where
     go e = case e of
-        Lam x _A b -> helper Lam x _A b
-        Pi  x _A b -> helper Pi  x _A b
-        App f a    -> App (go f) (go a)
-        Var x      -> if (x == x0) then e0 else e
-        Const _    -> e
+        Lam x' _A  b -> n' `seq` Lam x' (go _A)  b'
+          where
+            n'  = if x == x' then n + 1 else n
+            v'  = V x n'
+            b'  = subst v' (shift 1 (V x' 0) e0)  b
+        Pi  x' _A _B -> n' `seq` Pi  x' (go _A) _B'
+          where
+            n'  = if x == x' then n + 1 else n
+            v'  = V x n'
+            _B' = subst v' (shift 1 (V x' 0) e0) _B
+        App f a     -> App (go f) (go a)
+        Var v'      -> if v == v' then e0 else e
+        Const _     -> e
 
-    helper c x@(V txt n) _A b =
-        if x == x0
-        then c x _A b  -- x shadows x0
-        else
-            let fs = IntSet.union (freeOf txt (Var x0)) (freeOf txt e0)
-            in  if IntSet.member n fs
-                then
-                    let x' = V txt (IntSet.findMax fs + 1)
-                    in  c x' (go _A) (go (subst x (Var x') b))
-                else c x (go _A) (go b)
+-- | @shift n (V x 0)@ adds @n@ to all free variables named @x@ within an `Expr`
+shift :: Int -> Var -> Expr -> Expr
+shift d (V x c) e0 = go e0
+  where
+    go e = case e of
+        Lam x' _A  b  -> c' `seq` Lam x' (go _A)  b'
+          where
+            c'  = c + 1
+            b'  = if x == x' then shift d (V x c') b else go  b
+        Pi  x' _A _B  -> c' `seq` Pi  x' (go _A) _B'
+          where
+            c'  = c + 1
+            _B' = if x == x' then shift d (V x c') _B else go _B
+        App f a       -> App (go f) (go a)
+        Var (V x' c') -> if x == x' && c' >= c then Var (V x' (c' + d)) else e
+        Const _       -> e
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
@@ -386,11 +426,11 @@ subst x0 e0 = go
 -}
 typeWith :: Context -> Expr -> Either TypeError Expr
 typeWith ctx e = case e of
-    Const c  -> fmap Const (axiom c)
-    Var x    -> case lookup x ctx of
+    Const c     -> fmap Const (axiom c)
+    Var x       -> case lookupCtx x ctx of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
-    Lam x _A b -> do
+    Lam x _A b  -> do
         _B <- typeWith ((x, _A):ctx) b
         let p = Pi x _A _B
         _t <- typeWith ctx p
@@ -406,17 +446,22 @@ typeWith ctx e = case e of
             Const t -> return t
             _       -> Left (TypeError ctx' e (InvalidOutputType _B))
         fmap Const (rule s t)
-    App f a  -> do
+    App f a     -> do
         e' <- fmap whnf (typeWith ctx f)
         (x, _A, _B) <- case e' of
             Pi x _A _B -> return (x, _A, _B)
             _          -> Left (TypeError ctx e NotAFunction)
         _A' <- typeWith ctx a
-        let nf_A  = normalize _A 
-            nf_A' = normalize _A'
-        if nf_A == nf_A'
-            then return (subst x a _B)
-            else Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
+        if _A == _A'
+            then do
+                let v   = V x 0
+                    a'  = shift 1 v a
+                    _B' = subst v a' _B
+                return (shift (-1) v _B')
+            else do
+                let nf_A  = normalize _A
+                    nf_A' = normalize _A'
+                Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
@@ -429,18 +474,28 @@ typeOf = typeWith []
 whnf :: Expr -> Expr
 whnf e = case e of
     App f a -> case whnf f of
-        Lam x _A b -> whnf (subst x a b)  -- Beta reduce
+        Lam x _A b -> whnf (shift (-1) v b')  -- Beta reduce
+          where
+            v  = V x 0
+            a' = shift 1 v a
+            b' = subst v a' b
         _          -> e
     _       -> e
 
 -- | Returns whether a variable is free in an expression
 freeIn :: Var -> Expr -> Bool
-freeIn x = go
+freeIn v@(V x n) = go
   where
     go e = case e of
-        Lam x' _A b -> x /= x' && (go _A || go b)
-        Pi  x' _A b -> x /= x' && (go _A || go b)
-        Var x'      -> x == x'
+        Lam x' _A b  ->
+            n' `seq` (go _A || if x == x' then freeIn (V x n')  b else go  b)
+          where
+            n' = n + 1
+        Pi  x' _A _B ->
+            n' `seq` (go _A || if x == x' then freeIn (V x n') _B else go _B)
+          where
+            n' = n + 1
+        Var v'      -> v == v'
         App f a     -> go f || go a
         Const _     -> False
 
@@ -455,17 +510,25 @@ normalize :: Expr -> Expr
 normalize e = case e of
     Lam x _A b -> case b' of
         App f a -> case a of
-            Var x' | x == x' && not (x `freeIn` f) -> f  -- Eta reduce
-                   | otherwise                     -> e'
+            Var v' | v == v' && not (v `freeIn` f) ->
+                shift (-1) (V x 0) f  -- Eta reduce
+                   | otherwise                     ->
+                e'
+              where
+                v = V x 0
             _                                      -> e'
         _       -> e'
       where
         b' = normalize b
         e' = Lam x (normalize _A) b'
-    Pi  x _A b -> Pi  x (normalize _A) (normalize b)
-    App f _C   -> case normalize f of
-        Lam x _A _B -> normalize (subst x _C _B)  -- Beta reduce
-        f'          -> App f' (normalize _C)
+    Pi  x _A _B -> Pi x (normalize _A) (normalize _B)
+    App f a     -> case normalize f of
+        Lam x _A b -> normalize (shift (-1) v b')  -- Beta reduce
+          where
+            v  = V x 0
+            a' = shift 1 v a
+            b' = subst v a' b
+        f'         -> App f' (normalize a)
     Var   _    -> e
     Const _    -> e
 
