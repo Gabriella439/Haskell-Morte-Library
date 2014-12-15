@@ -57,7 +57,14 @@ module Morte.Core (
 
     -- * Errors
     TypeError(..),
-    TypeMessage(..)
+    TypeMessage(..),
+
+    -- * Builders
+    buildConst,
+    buildVar,
+    buildExpr,
+    buildTypeMessage,
+    buildTypeError,
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -285,16 +292,18 @@ data TypeError = TypeError
 
 instance Exception TypeError
 
+-- | Render a pretty-printed `Const` as a `Builder`
 buildConst :: Const -> Builder
 buildConst c = case c of
     Star -> "*"
     Box  -> "□"
 
+-- | Render a pretty-printed `Var` as a `Builder`
 buildVar :: Var -> Builder
 buildVar (V txt n) =
     fromLazyText txt <> if n == 0 then mempty else "@" <> decimal n
 
--- | Render a pretty-printed expression as a `Builder`
+-- | Render a pretty-printed `Expr` as a `Builder`
 buildExpr :: Expr -> Builder
 buildExpr = go False False
   where
@@ -340,6 +349,7 @@ buildExpr = go False False
             App f a            -> go' f || go' a
             Const _            -> False
 
+-- | Render a pretty-printed `TypeMessage` as a `Builder`
 buildTypeMessage :: TypeMessage -> Builder
 buildTypeMessage msg = case msg of
     UnboundVariable          ->
@@ -362,6 +372,7 @@ buildTypeMessage msg = case msg of
     Untyped c                ->
             "Error: " <> buildConst c <> " has no type\n"
 
+-- | Render a pretty-printed `TypeError` as a `Builder`
 buildTypeError :: TypeError -> Builder
 buildTypeError (TypeError ctx expr msg)
     =   (    if Text.null (toLazyText buildContext )
