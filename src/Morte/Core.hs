@@ -52,6 +52,7 @@ module Morte.Core (
     normalize,
 
     -- * Utilities
+    used,
     prettyExpr,
     prettyTypeError,
 
@@ -334,20 +335,21 @@ buildExpr = go False False
             <>  go True False f <> " " <> go True True a
             <>  (if parenApp then ")" else "")
 
-    used :: Var -> Expr -> Bool
-    used v@(V x n) = go'
-      where
-        go' e = case e of
-            Var v' | v == v'   -> True
-                   | otherwise -> False
-            Lam x' _A b         -> n' `seq` (go' _A || used (V x n') b)
-              where
-                n' = if x == x' then n + 1 else n
-            Pi  x' _A b         -> n' `seq` (go' _A || used (V x n') b)
-              where
-                n' = if x == x' then n + 1 else n
-            App f a            -> go' f || go' a
-            Const _            -> False
+-- | Determine whether a variable appears within an expression
+used :: Var -> Expr -> Bool
+used (V x n0) e0 = go e0 n0
+  where
+    go e n = case e of
+        Var v' | V x n == v' -> True
+               | otherwise   -> False
+        Lam x' _A  b         -> go _A n || (go  b $! n')
+          where
+            n' = if x == x' then n + 1 else n
+        Pi  x' _A _B         -> go _A n || (go _B $! n')
+          where
+            n' = if x == x' then n + 1 else n
+        App f a              -> go f n || go a n
+        Const _              -> False
 
 -- | Render a pretty-printed `TypeMessage` as a `Builder`
 buildTypeMessage :: TypeMessage -> Builder
