@@ -198,7 +198,7 @@ lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
                             | n >  0    = lookupN a abs' $! n - 1
                             | n == 0    = Just b'
                             | otherwise = Nothing
-lookupN _  []             _            = Nothing
+lookupN _  []             _             = Nothing
 
 lookupCtx :: Var -> Context -> Maybe Expr
 lookupCtx (V x n) ctx = lookupN x ctx n
@@ -393,42 +393,40 @@ buildTypeError (TypeError ctx expr msg)
 
 {-| Substitute all occurrences of a variable with an expression
 
-> subst v C B  ~  B[v := C]
+> subst x n C B  ~  B[x@n := C]
 -}
-subst :: Var -> Expr -> Expr -> Expr
-subst v@(V x n) e0 = go
-  where
-    go e = case e of
-        Lam x' _A  b -> n' `seq` Lam x' (go _A)  b'
-          where
-            n'  = if x == x' then n + 1 else n
-            v'  = V x n'
-            b'  = subst v' (shift 1 (V x' 0) e0)  b
-        Pi  x' _A _B -> n' `seq` Pi  x' (go _A) _B'
-          where
-            n'  = if x == x' then n + 1 else n
-            v'  = V x n'
-            _B' = subst v' (shift 1 (V x' 0) e0) _B
-        App f a     -> App (go f) (go a)
-        Var v'      -> if v == v' then e0 else e
-        Const _     -> e
+subst :: Text -> Int -> Expr -> Expr -> Expr
+subst x n e' e = case e of
+    Lam x' _A  b  -> Lam x' (subst x n e' _A)  b'
+      where
+        n'  = if x == x' then n + 1 else n
+        b'  = n' `seq` subst x n' (shift 1 x' 0 e')  b
+    Pi  x' _A _B  -> Pi  x' (subst x n e' _A) _B'
+      where
+        n'  = if x == x' then n + 1 else n
+        _B' = n' `seq` subst x n' (shift 1 x' 0 e') _B
+    App f a       -> App (subst x n e' f) (subst x n e' a)
+    Var (V x' n') -> if x == x' && n == n' then e' else e
+    Const k       -> Const k
 
--- | @shift n (V x 0)@ adds @n@ to all free variables named @x@ within an `Expr`
-shift :: Int -> Var -> Expr -> Expr
-shift d (V x c) e0 = go e0
+{-| @shift n x 0@ adds @n@ to the index of all free variables named @x@ within
+    an `Expr`
+-}
+shift :: Int -> Text -> Int -> Expr -> Expr
+shift d x0 c0 e0 = go e0 c0
   where
-    go e = case e of
-        Lam x' _A  b  -> c' `seq` Lam x' (go _A)  b'
+    go e c = case e of
+        Lam x _A  b  -> Lam x (go _A c) (go  b $! c')
           where
-            c'  = c + 1
-            b'  = if x == x' then shift d (V x c') b else go  b
-        Pi  x' _A _B  -> c' `seq` Pi  x' (go _A) _B'
+            c' = if x == x0 then c + 1 else c
+        Pi  x _A _B  -> Pi  x (go _A c) (go _B $! c')
           where
-            c'  = c + 1
-            _B' = if x == x' then shift d (V x c') _B else go _B
-        App f a       -> App (go f) (go a)
-        Var (V x' c') -> if x == x' && c' >= c then Var (V x' (c' + d)) else e
-        Const _       -> e
+            c' = if x == x0 then c + 1 else c
+        App f a       -> App (go f c) (go a c)
+        Var (V x n) -> n' `seq` Var (V x n')
+          where
+            n' = if x == x0 && n >= c then n + d else n
+        Const k       -> Const k
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
@@ -444,7 +442,8 @@ typeWith ctx e = case e of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b  -> do
-        _B <- typeWith ((x, _A):ctx) b
+        let ctx' = [ (x', shift 1 x 0 _A') | (x', _A') <- (x, _A):ctx ]
+        _B <- typeWith ctx' b
         let p = Pi x _A _B
         _t <- typeWith ctx p
         return p
@@ -453,7 +452,7 @@ typeWith ctx e = case e of
         s  <- case eS of
             Const s -> return s
             _       -> Left (TypeError ctx e (InvalidInputType _A))
-        let ctx' = (x, _A):ctx
+        let ctx' = [ (x', shift 1 x 0 _A') | (x', _A') <- (x, _A):ctx ]
         eT <- fmap whnf (typeWith ctx' _B)
         t  <- case eT of
             Const t -> return t
@@ -467,10 +466,9 @@ typeWith ctx e = case e of
         _A' <- typeWith ctx a
         if _A == _A'
             then do
-                let v   = V x 0
-                    a'  = shift 1 v a
-                    _B' = subst v a' _B
-                return (shift (-1) v _B')
+                let a'  = shift 1 x 0 a
+                    _B' = subst x 0 a' _B
+                return (shift (-1) x 0 _B')
             else do
                 let nf_A  = normalize _A
                     nf_A' = normalize _A'
@@ -487,11 +485,10 @@ typeOf = typeWith []
 whnf :: Expr -> Expr
 whnf e = case e of
     App f a -> case whnf f of
-        Lam x _A b -> whnf (shift (-1) v b')  -- Beta reduce
+        Lam x _A b -> whnf (shift (-1) x 0 b')  -- Beta reduce
           where
-            v  = V x 0
-            a' = shift 1 v a
-            b' = subst v a' b
+            a' = shift 1 x 0 a
+            b' = subst x 0 a' b
         _          -> e
     _       -> e
 
@@ -524,7 +521,7 @@ normalize e = case e of
     Lam x _A b -> case b' of
         App f a -> case a of
             Var v' | v == v' && not (v `freeIn` f) ->
-                shift (-1) (V x 0) f  -- Eta reduce
+                shift (-1) x 0 f  -- Eta reduce
                    | otherwise                     ->
                 e'
               where
@@ -536,11 +533,10 @@ normalize e = case e of
         e' = Lam x (normalize _A) b'
     Pi  x _A _B -> Pi x (normalize _A) (normalize _B)
     App f a     -> case normalize f of
-        Lam x _A b -> normalize (shift (-1) v b')  -- Beta reduce
+        Lam x _A b -> normalize (shift (-1) x 0 b')  -- Beta reduce
           where
-            v  = V x 0
-            a' = shift 1 v a
-            b' = subst v a' b
+            a' = shift 1 x 0 a
+            b' = subst x 0 a' b
         f'         -> App f' (normalize a)
     Var   _    -> e
     Const _    -> e
