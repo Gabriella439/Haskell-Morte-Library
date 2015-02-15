@@ -323,7 +323,7 @@ buildExpr = go False False
             <>  (if parenBind then ")" else "")
         Pi  x _A b ->
                 (if parenBind then "(" else "")
-            <>  (if used x b
+            <>  (if used x 0 b
                  then
                      "∀(" <> fromLazyText x <> " : " <> go False False _A <> ")"
                  else go True False _A )
@@ -354,15 +354,19 @@ buildExpr = go False False
 
     ... because the `a@1` would misleadingly appear to be an unbound variable.
 -}
-used :: Text -> Expr -> Bool
-used x = go
+used :: Text -> Int -> Expr -> Bool
+used x n0 e0 = go e0 n0
   where
-    go e = case e of
-        Var (V x' _) | x == x'   -> True
-                     | otherwise -> False
-        Lam _  _A  b             -> go _A || go  b
-        Pi  _  _A _B             -> go _A || go _B
-        App f a                  -> go f  || go a
+    go e n = case e of
+        Var (V x' n') | x == x' && n' >= n -> True
+                      | otherwise          -> False
+        Lam x'  _A  b             -> go _A n || (go  b $! n')
+          where
+            n' = if x == x' then n + 1 else n
+        Pi  x'  _A _B             -> go _A n || (go _B $! n')
+          where
+            n' = if x == x' then n + 1 else n
+        App f a                  -> go f n || go a n
         Const _                  -> False
 
 -- | Render a pretty-printed `TypeMessage` as a `Builder`
