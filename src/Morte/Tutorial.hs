@@ -283,7 +283,7 @@ import Morte.Core
 >     var1 = expr1
 >
 >     var2 : type2
->     var2 = type2
+>     var2 = expr2
 >
 > in  result
 
