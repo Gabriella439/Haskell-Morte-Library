@@ -70,7 +70,7 @@ module Morte.Core (
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Exception (Exception)
-import Control.Monad.Trans.State (State, evalState, modify)
+import Control.Monad.Trans.State (State, evalState)
 import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
@@ -214,14 +214,18 @@ instance Eq Expr where
                     Nothing  -> xL  == xR
                     Just xR' -> xR' == xR )
         go (Lam xL tL bL) (Lam xR tR bR) = do
-            modify ((xL, xR):)
+            ctx <- State.get
+            State.put ((xL, xR):ctx)
             eq1 <- go tL tR
             eq2 <- go bL bR
+            State.put ctx
             return (eq1 && eq2)
         go (Pi xL tL bL) (Pi xR tR bR) = do
-            modify ((xL, xR):)
+            ctx <- State.get
+            State.put ((xL, xR):ctx)
             eq1 <- go tL tR
             eq2 <- go bL bR
+            State.put ctx
             return (eq1 && eq2)
         go (App fL aL) (App fR aR) = do
             b1 <- go fL fR
@@ -323,7 +327,7 @@ buildExpr = go False False
             <>  (if parenBind then ")" else "")
         Pi  x _A b ->
                 (if parenBind then "(" else "")
-            <>  (if used x b
+            <>  (if True -- used x b
                  then
                      "∀(" <> fromLazyText x <> " : " <> go False False _A <> ")"
                  else go True False _A )
