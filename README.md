@@ -1,4 +1,4 @@
-# Morte v1.0.1
+# Morte v1.1.0
 
 Morte is a super-optimizing intermediate language for functional languages.
 
