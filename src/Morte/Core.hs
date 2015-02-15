@@ -323,7 +323,7 @@ buildExpr = go False False
             <>  (if parenBind then ")" else "")
         Pi  x _A b ->
                 (if parenBind then "(" else "")
-            <>  (if used x 0 b
+            <>  (if used x b
                  then
                      "∀(" <> fromLazyText x <> " : " <> go False False _A <> ")"
                  else go True False _A )
@@ -354,8 +354,8 @@ buildExpr = go False False
 
     ... because the `a@1` would misleadingly appear to be an unbound variable.
 -}
-used :: Text -> Int -> Expr -> Bool
-used x n0 e0 = go e0 n0
+used :: Text -> Expr -> Bool
+used x e0 = go e0 0
   where
     go e n = case e of
         Var (V x' n') | x == x' && n' >= n -> True
