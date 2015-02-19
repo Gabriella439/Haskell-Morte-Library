@@ -69,6 +69,7 @@ module Morte.Core (
     ) where
 
 import Control.Applicative ((<$>), (<*>))
+import Control.DeepSeq
 import Control.Exception (Exception)
 import Control.Monad.Trans.State (State, evalState)
 import qualified Control.Monad.Trans.State as State
@@ -140,6 +141,9 @@ instance IsString Var
   where
     fromString str = V (Text.pack str) 0
 
+instance NFData Var where
+  rnf (V n p) = rnf n `seq` rnf p
+
 {-| Constants for the calculus of constructions
 
     The only axiom is:
@@ -166,6 +170,8 @@ instance Binary Const where
             0 -> return Star
             1 -> return Box
             _ -> fail "get Const: Invalid tag byte"
+
+instance NFData Const
 
 axiom :: Const -> Either TypeError Const
 axiom Star = return Box
@@ -269,6 +275,14 @@ instance Binary Expr where
 instance IsString Expr
   where
     fromString str = Var (fromString str)
+
+instance NFData Expr where
+    rnf e = case e of
+        Const c     -> rnf c
+        Var   v     -> rnf v
+        Lam x _A b  -> rnf x `seq` rnf _A `seq` rnf b
+        Pi  x _A _B -> rnf x `seq` rnf _A `seq` rnf _B
+        App f a     -> rnf f `seq` rnf a
 
 {-| Bound variable names and their types
 
