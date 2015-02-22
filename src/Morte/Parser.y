@@ -1,5 +1,6 @@
 {
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 -- | Parsing logic for the Morte language
 
@@ -13,6 +14,7 @@ module Morte.Parser (
     ParseMessage(..)
     ) where
 
+import Control.Exception (Exception)
 import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
 import Control.Monad.Trans.State.Strict (State, runState)
 import Data.Functor.Identity (Identity, runIdentity)
@@ -21,6 +23,7 @@ import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lazy.Builder.Int (decimal)
+import Data.Typeable (Typeable)
 import Lens.Family.Stock (_1, _2)
 import Lens.Family.State.Strict ((.=), use, zoom)
 import Morte.Core (Var(..), Const(..), Expr(..))
@@ -124,7 +127,9 @@ exprFromText text = case runState (runErrorT parseExpr) initialStatus of
 data ParseError = ParseError
     { position     :: Position
     , parseMessage :: ParseMessage
-    } deriving (Show)
+    } deriving (Show, Typeable)
+
+instance Exception ParseError
 
 -- | Pretty-print a `ParseError`
 prettyParseError :: ParseError -> Text

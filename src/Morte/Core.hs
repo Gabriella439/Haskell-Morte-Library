@@ -300,7 +300,7 @@ data TypeMessage
     | NotAFunction
     | TypeMismatch Expr Expr
     | Untyped Const
-    deriving (Show, Typeable)
+    deriving (Show)
 
 -- | A structured type error that includes context
 data TypeError = TypeError
