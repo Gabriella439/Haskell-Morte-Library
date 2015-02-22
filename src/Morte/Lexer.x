@@ -49,7 +49,7 @@ tokens :-
     "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                    }
     "\" | "λ"                           { \_    -> yield Lambda                }
     $digit+                             { \text -> yield (Number (toInt text)) }
-    $fst $labelchar+ | "(" $opchar+ ")" { \text -> yield (Label text)          }
+    $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)          }
 
 {
 toInt :: Text -> Int
