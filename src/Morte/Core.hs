@@ -79,7 +79,7 @@ import Data.Binary.Put (putWord64le)
 import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
 import Data.Text ()  -- For the `IsString` instance
-import Data.Text.Lazy (Text)
+import Data.Text.Lazy (Text, unpack)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
@@ -307,7 +307,10 @@ data TypeError = TypeError
     { context     :: Context
     , current     :: Expr
     , typeMessage :: TypeMessage
-    } deriving (Show, Typeable)
+    } deriving (Typeable)
+
+instance Show TypeError where
+    show = unpack . prettyTypeError
 
 instance Exception TypeError
 

@@ -19,7 +19,7 @@ import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
 import Control.Monad.Trans.State.Strict (State, runState)
 import Data.Functor.Identity (Identity, runIdentity)
 import Data.Monoid (mempty, (<>))
-import Data.Text.Lazy (Text)
+import Data.Text.Lazy (Text, unpack)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lazy.Builder.Int (decimal)
@@ -127,7 +127,10 @@ exprFromText text = case runState (runErrorT parseExpr) initialStatus of
 data ParseError = ParseError
     { position     :: Position
     , parseMessage :: ParseMessage
-    } deriving (Show, Typeable)
+    } deriving (Typeable)
+
+instance Show ParseError where
+    show = unpack . prettyParseError
 
 instance Exception ParseError
 
