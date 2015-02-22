@@ -344,7 +344,7 @@ buildExpr = go False False
             <>  (if parenBind then ")" else "")
         Pi  x _A b ->
                 (if parenBind then "(" else "")
-            <>  (if True -- used x b
+            <>  (if used x b
                  then
                      "∀(" <> fromLazyText x <> " : " <> go False False _A <> ")"
                  else go True False _A )
