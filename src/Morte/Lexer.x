@@ -27,9 +27,8 @@ $digit = 0-9
 -- Same as Haskell
 $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 
--- I intentionally disallow `'` or digits in variable labels.
--- Use the `label@number` syntax to disambiguate variables with the same label
-$labelchar = [A-Za-z_]
+$fst       = [A-Za-z_]
+$labelchar = [A-Za-z0-9_]
 
 $whiteNoNewline = $white # \n
 
@@ -50,7 +49,7 @@ tokens :-
     "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                    }
     "\" | "λ"                           { \_    -> yield Lambda                }
     $digit+                             { \text -> yield (Number (toInt text)) }
-    $labelchar+ | "(" $opchar+ ")"      { \text -> yield (Label text)          }
+    $fst $labelchar+ | "(" $opchar+ ")" { \text -> yield (Label text)          }
 
 {
 toInt :: Text -> Int
