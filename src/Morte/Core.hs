@@ -358,22 +358,18 @@ buildExpr = go False False
 
 {-| Determine whether a `Pi`-bound variable should be displayed
 
-    Notice that if any variable within the body of a `Pi` shares the same name
-    we display the `Pi`-bound variable, even if the variables are not the same
-    (i.e. the DeBruijn indices do not match).  We still would need to display
-    the `Pi`-bound variable since it affects the DeBruijn index of all
-    downstream variables of the same name.
+    Notice that if any variable within the body of a `Pi` shares the same name and
+    an equal or greater DeBruijn index we display the `Pi`-bound variable.  To
+    illustrate why we don't just check for equality, consider this type:
 
-    To illustrate this, consider this type:
+    > forall (a : *) -> forall (a : *) -> a@1
 
-        forall (a : *) -> forall (a : *) -> a@1
+    The @a\@1@ refers to the outer @a@ (i.e. the left one), but if we hid the
+    inner @a@ (the right one), the type would make no sense:
 
-    The `a@1` refers to the outer `a` (i.e. the left one), but if we hid the
-    inner `a` (the right one), the type would make no sense:
+    > forall (a : *) -> * -> a@1
 
-        forall (a : *) -> * -> a@1
-
-    ... because the `a@1` would misleadingly appear to be an unbound variable.
+    ... because the @a\@1@ would misleadingly appear to be an unbound variable.
 -}
 used :: Text -> Expr -> Bool
 used x e0 = go e0 0
