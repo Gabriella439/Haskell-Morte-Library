@@ -92,9 +92,9 @@ import Data.Word (Word8)
     The `Text` field is the variable's name (i.e. \"@x@\").
 
     The `Int` field disambiguates variables with the same name if there are
-    multiple bound variables in scope.  Zero refers to the nearest bound
-    variable and the index increases by one for each bound variable of the
-    same name going outward.  The following diagram may help:
+    multiple bound variables of the same name in scope.  Zero refers to the
+    nearest bound variable and the index increases by one for each bound variable
+    of the same name going outward.  The following diagram may help:
 
 >                           +-refers to-+
 >                           |           |
