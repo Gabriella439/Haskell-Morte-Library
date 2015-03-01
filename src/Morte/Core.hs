@@ -302,6 +302,15 @@ data TypeMessage
     | Untyped Const
     deriving (Show)
 
+instance NFData TypeMessage where
+    rnf tm = case tm of
+        UnboundVariable     -> ()
+        InvalidInputType e  -> rnf e
+        InvalidOutputType e -> rnf e
+        NotAFunction        -> ()
+        TypeMismatch e1 e2  -> rnf e1 `seq` rnf e2
+        Untyped c           -> rnf c
+
 -- | A structured type error that includes context
 data TypeError = TypeError
     { context     :: Context
@@ -313,6 +322,9 @@ instance Show TypeError where
     show = unpack . prettyTypeError
 
 instance Exception TypeError
+
+instance NFData TypeError where
+    rnf (TypeError ctx crr tym) = rnf ctx `seq` rnf crr `seq` rnf tym
 
 -- | Render a pretty-printed `Const` as a `Builder`
 buildConst :: Const -> Builder
