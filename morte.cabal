@@ -25,6 +25,8 @@ Description: Morte is a typed, purely functional, and strongly normalizing
     .
     Read "Morte.Tutorial" to learn how to use this library
 Category: Compiler
+Data-Dir: benchmarks/src
+Data-Files: *.mt
 Source-Repository head
     Type: git
     Location: https://github.com/Gabriel439/Haskell-Morte-Library
@@ -56,3 +58,15 @@ Executable morte
         morte                                           ,
         optparse-applicative                <= 0.11.0.1 ,
         text                 >= 0.11.1.0 && <  1.3
+
+Benchmark benchmarks
+    Type:           exitcode-stdio-1.0
+    HS-Source-Dirs: benchmarks
+    Main-Is:        Bench.hs
+    GHC-Options:    -O2 -Wall
+
+    Build-Depends:
+        base      >= 4        && < 5    ,
+        criterion                < 1.1  ,
+        morte     >= 1.1.0              ,
+        text      >= 0.11.1.0 && <  1.3
