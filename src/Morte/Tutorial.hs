@@ -1058,7 +1058,7 @@ import Morte.Core
 
 {- $optimization
     You might wonder why Morte forbids recursion, forcing us to encode data
-    types F-algebras or F-coalgebras.  Morte imposes this restriction this in
+    types as F-algebras or F-coalgebras.  Morte imposes this restriction in
     order to super-optimize your program.  For example, consider the following
     program which maps the identity function over a list:
 
@@ -1489,7 +1489,7 @@ import Morte.Core
 
     Normalization leads to certain emergent properties when optimizing recursive
     code or corecursive code.  If you optimize a corecursive loop you will
-    produce code equivalent an @while@ loop where the seed is the initial state
+    produce code equivalent to a @while@ loop where the seed is the initial state
     of the loop and the generating step function unfolds one iteration of the
     loop.  If you optimize a recursive loop you will generate an unrolled loop.
     See the next section for an example of Morte generating a very large
@@ -2005,7 +2005,7 @@ input to standard output:
 
     If every functional language has a Morte encoder/decoder, then eventually
     there can be a code utility analogous to @pandoc@ that converts code written
-    any of these languages to code written in any other of these language.
+    in any of these languages to code written in any other.
 
     Additionally, Morte provides a standard `Data.Binary.Binary` interface that
     you can use for serializing and deserializing code.  You may find this
@@ -2031,7 +2031,7 @@ input to standard output:
     in order to reuse the large body of research for translating programming
     abstractions to and from the polymorphic lambda calculus.
 
-    Finally, you can use Morte as a equational reasoning engine to learn how
+    Finally, you can use Morte as an equational reasoning engine to learn how
     high-level abstractions reduce to low-level abstractions.  If you are
     teaching lambda calculus you can use Morte as a teaching tool for how to
     encode abstractions within lambda calculus.
