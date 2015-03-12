@@ -53,6 +53,7 @@ module Morte.Core (
 
     -- * Utilities
     used,
+    shift,
     prettyExpr,
     prettyTypeError,
 
@@ -447,20 +448,20 @@ subst x n e' e = case e of
     Lam x' _A  b  -> Lam x' (subst x n e' _A)  b'
       where
         n'  = if x == x' then n + 1 else n
-        b'  = n' `seq` subst x n' (shift 1 x' 0 e')  b
+        b'  = n' `seq` subst x n' (shift 1 x' e')  b
     Pi  x' _A _B  -> Pi  x' (subst x n e' _A) _B'
       where
         n'  = if x == x' then n + 1 else n
-        _B' = n' `seq` subst x n' (shift 1 x' 0 e') _B
+        _B' = n' `seq` subst x n' (shift 1 x' e') _B
     App f a       -> App (subst x n e' f) (subst x n e' a)
     Var (V x' n') -> if x == x' && n == n' then e' else e
     Const k       -> Const k
 
-{-| @shift n x 0@ adds @n@ to the index of all free variables named @x@ within
-    an `Expr`
+{-| @shift n x@ adds @n@ to the index of all free variables named @x@ within an
+    `Expr`
 -}
-shift :: Int -> Text -> Int -> Expr -> Expr
-shift d x0 c0 e0 = go e0 c0
+shift :: Int -> Text -> Expr -> Expr
+shift d x0 e0 = go e0 0
   where
     go e c = case e of
         Lam x _A  b  -> Lam x (go _A c) (go  b $! c')
@@ -489,7 +490,7 @@ typeWith ctx e = case e of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b  -> do
-        let ctx' = [ (x', shift 1 x 0 _A') | (x', _A') <- (x, _A):ctx ]
+        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, _A):ctx ]
         _B <- typeWith ctx' b
         let p = Pi x _A _B
         _t <- typeWith ctx p
@@ -499,7 +500,7 @@ typeWith ctx e = case e of
         s  <- case eS of
             Const s -> return s
             _       -> Left (TypeError ctx e (InvalidInputType _A))
-        let ctx' = [ (x', shift 1 x 0 _A') | (x', _A') <- (x, _A):ctx ]
+        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, _A):ctx ]
         eT <- fmap whnf (typeWith ctx' _B)
         t  <- case eT of
             Const t -> return t
@@ -513,9 +514,9 @@ typeWith ctx e = case e of
         _A' <- typeWith ctx a
         if _A == _A'
             then do
-                let a'  = shift 1 x 0 a
+                let a'  = shift 1 x a
                     _B' = subst x 0 a' _B
-                return (shift (-1) x 0 _B')
+                return (shift (-1) x _B')
             else do
                 let nf_A  = normalize _A
                     nf_A' = normalize _A'
@@ -532,9 +533,9 @@ typeOf = typeWith []
 whnf :: Expr -> Expr
 whnf e = case e of
     App f a -> case whnf f of
-        Lam x _A b -> whnf (shift (-1) x 0 b')  -- Beta reduce
+        Lam x _A b -> whnf (shift (-1) x b')  -- Beta reduce
           where
-            a' = shift 1 x 0 a
+            a' = shift 1 x a
             b' = subst x 0 a' b
         _          -> e
     _       -> e
@@ -568,7 +569,7 @@ normalize e = case e of
     Lam x _A b -> case b' of
         App f a -> case a of
             Var v' | v == v' && not (v `freeIn` f) ->
-                shift (-1) x 0 f  -- Eta reduce
+                shift (-1) x f  -- Eta reduce
                    | otherwise                     ->
                 e'
               where
@@ -580,9 +581,9 @@ normalize e = case e of
         e' = Lam x (normalize _A) b'
     Pi  x _A _B -> Pi x (normalize _A) (normalize _B)
     App f a     -> case normalize f of
-        Lam x _A b -> normalize (shift (-1) x 0 b')  -- Beta reduce
+        Lam x _A b -> normalize (shift (-1) x b')  -- Beta reduce
           where
-            a' = shift 1 x 0 a
+            a' = shift 1 x a
             b' = subst x 0 a' b
         f'         -> App f' (normalize a)
     Var   _    -> e
