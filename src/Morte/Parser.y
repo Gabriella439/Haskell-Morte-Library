@@ -137,7 +137,8 @@ instance Exception ParseError
 -- | Pretty-print a `ParseError`
 prettyParseError :: ParseError -> Text
 prettyParseError (ParseError (Lexer.P l c) e) = Builder.toLazyText (
-        "Line:   " <> decimal l <> "\n"
+        "\n"
+    <>  "Line:   " <> decimal l <> "\n"
     <>  "Column: " <> decimal c <> "\n"
     <>  "\n"
     <>  case e of

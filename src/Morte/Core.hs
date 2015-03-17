@@ -425,7 +425,8 @@ buildTypeMessage msg = case msg of
 -- | Render a pretty-printed `TypeError` as a `Builder`
 buildTypeError :: TypeError -> Builder
 buildTypeError (TypeError ctx expr msg)
-    =   (    if Text.null (toLazyText buildContext )
+    =   "\n"
+    <>  (    if Text.null (toLazyText buildContext )
              then mempty
              else "Context:\n" <> buildContext <> "\n"
         )
