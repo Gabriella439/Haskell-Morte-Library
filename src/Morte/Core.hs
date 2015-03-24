@@ -584,7 +584,7 @@ normalize e = case e of
     App f a     -> case normalize f of
         Lam x _A b -> normalize (shift (-1) x b')  -- Beta reduce
           where
-            a' = shift 1 x a
+            a' = shift 1 x (normalize a)
             b' = subst x 0 a' b
         f'         -> App f' (normalize a)
     Var   _    -> e
