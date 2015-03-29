@@ -172,7 +172,8 @@ instance Binary Const where
             1 -> return Box
             _ -> fail "get Const: Invalid tag byte"
 
-instance NFData Const
+instance NFData Const where
+    rnf c = seq c ()
 
 axiom :: Const -> Either TypeError Const
 axiom Star = return Box
