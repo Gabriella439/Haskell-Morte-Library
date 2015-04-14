@@ -1,6 +1,4 @@
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Morte language.  This
@@ -79,7 +77,6 @@ import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
-import Data.Hashable (Hashable)
 import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
 import Data.Text ()  -- For the `IsString` instance
@@ -90,7 +87,6 @@ import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
-import GHC.Generics (Generic)
 
 {-| Label for a bound variable
 
@@ -124,7 +120,7 @@ import GHC.Generics (Generic)
     Zero indices are omitted when pretty-printing `Var`s and non-zero indices
     appear as a numeric suffix.
 -}
-data Var = V Text Int deriving (Generic, Eq, Show)
+data Var = V Text Int deriving (Eq, Show)
 
 putUtf8 :: Text -> Put
 putUtf8 txt = put (Text.encodeUtf8 (Text.toStrict txt))
@@ -149,8 +145,6 @@ instance IsString Var
 instance NFData Var where
   rnf (V n p) = rnf n `seq` rnf p
 
-instance Hashable Var
-
 {-| Constants for the calculus of constructions
 
     The only axiom is:
@@ -165,7 +159,7 @@ instance Hashable Var
 > ⊦ □ ↝ □ : □
 
 -}
-data Const = Star | Box deriving (Generic, Eq, Show, Bounded, Enum)
+data Const = Star | Box deriving (Eq, Show, Bounded, Enum)
 
 instance Binary Const where
     put c = case c of
@@ -180,8 +174,6 @@ instance Binary Const where
 
 instance NFData Const where
     rnf c = seq c ()
-
-instance Hashable Const
 
 axiom :: Const -> Either TypeError Const
 axiom Star = return Box
@@ -207,7 +199,7 @@ data Expr
     | Pi  Text Expr Expr
     -- | > App f a        ~  f a
     | App Expr Expr
-    deriving (Generic, Show)
+    deriving (Show)
 
 lookupN :: Eq a => a -> [(a, b)] -> Int -> Maybe b
 lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
@@ -293,8 +285,6 @@ instance NFData Expr where
         Lam x _A b  -> rnf x `seq` rnf _A `seq` rnf b
         Pi  x _A _B -> rnf x `seq` rnf _A `seq` rnf _B
         App f a     -> rnf f `seq` rnf a
-
-instance Hashable Expr
 
 {-| Bound variable names and their types
 
