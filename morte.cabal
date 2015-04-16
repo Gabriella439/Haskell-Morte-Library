@@ -67,6 +67,6 @@ Benchmark benchmarks
 
     Build-Depends:
         base      >= 4        && < 5    ,
-        criterion                < 1.1  ,
+        criterion                < 1.2  ,
         morte     >= 1.1.0              ,
         text      >= 0.11.1.0 && <  1.3
