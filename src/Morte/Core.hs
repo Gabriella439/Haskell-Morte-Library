@@ -211,6 +211,14 @@ lookupN _  []             _             = Nothing
 lookupCtx :: Var -> Context -> Maybe Expr
 lookupCtx (V x n) ctx = lookupN x ctx n
 
+match :: Text -> Int -> Text -> Int -> [(Text, Text)] -> Bool
+match xL nL xR nR  []                                      = xL == xR && nL == nR
+match xL 0  xR 0  ((xL', xR'):_ ) | xL == xL' && xR == xR' = True
+match xL nL xR nR ((xL', xR'):xs) = nL' `seq` nR' `seq` match xL nL' xR nR' xs
+  where
+    nL' = if xL == xL' then nL - 1 else nL
+    nR' = if xR == xR' then nR - 1 else nR
+
 instance Eq Expr where
     eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
       where
@@ -218,9 +226,7 @@ instance Eq Expr where
         go (Const cL) (Const cR) = return (cL == cR)
         go (Var (V xL nL)) (Var (V xR nR)) = do
             ctx <- State.get
-            return (nL == nR && case lookupN xL ctx nL of
-                    Nothing  -> xL  == xR
-                    Just xR' -> xR' == xR )
+            return (match xL nL xR nR ctx)
         go (Lam xL tL bL) (Lam xR tR bR) = do
             ctx <- State.get
             State.put ((xL, xR):ctx)
@@ -492,7 +498,7 @@ typeWith ctx e = case e of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b  -> do
-        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, _A):ctx ]
+        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, normalize _A):ctx ]
         _B <- typeWith ctx' b
         let p = Pi x _A _B
         _t <- typeWith ctx p
@@ -502,7 +508,7 @@ typeWith ctx e = case e of
         s  <- case eS of
             Const s -> return s
             _       -> Left (TypeError ctx e (InvalidInputType _A))
-        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, _A):ctx ]
+        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, normalize _A):ctx ]
         eT <- fmap whnf (typeWith ctx' _B)
         t  <- case eT of
             Const t -> return t
