@@ -498,7 +498,7 @@ typeWith ctx e = case e of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b  -> do
-        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, normalize _A):ctx ]
+        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, _A):ctx ]
         _B <- typeWith ctx' b
         let p = Pi x _A _B
         _t <- typeWith ctx p
@@ -508,7 +508,7 @@ typeWith ctx e = case e of
         s  <- case eS of
             Const s -> return s
             _       -> Left (TypeError ctx e (InvalidInputType _A))
-        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, normalize _A):ctx ]
+        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, _A):ctx ]
         eT <- fmap whnf (typeWith ctx' _B)
         t  <- case eT of
             Const t -> return t
