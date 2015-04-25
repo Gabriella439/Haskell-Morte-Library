@@ -26,7 +26,7 @@ import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 import Lens.Family.Stock (_1, _2)
 import Lens.Family.State.Strict ((.=), use, zoom)
-import Morte.Core (Var(..), Const(..), Expr(..))
+import Morte.Core (Var(..), Const(..), Path(..), Expr(..))
 import qualified Morte.Lexer as Lexer
 import Morte.Lexer (Token, Position)
 import Pipes (Producer, hoist, lift, next)
@@ -54,7 +54,7 @@ import Pipes (Producer, hoist, lift, next)
 
 %%
 
-Expr :: { Expr }
+Expr :: { Expr Path }
      : BExpr                                   { $1           }
      | '\\'  '(' label ':' Expr ')' '->' Expr  { Lam $3 $5 $8 }
      | '|~|' '(' label ':' Expr ')' '->' Expr  { Pi  $3 $5 $8 }
@@ -64,11 +64,11 @@ VExpr :: { Var }
       : label '@' number                       { V $1 $3      }
       | label                                  { V $1 0       }
 
-BExpr :: { Expr }
+BExpr :: { Expr Path }
       :  BExpr AExpr                            { App $1 $2    }
       | AExpr                                  { $1           }
 
-AExpr :: { Expr }
+AExpr :: { Expr Path }
       : VExpr                                  { Var $1       }
       | '*'                                    { Const Star   }
       | 'BOX'                                  { Const Box    }
@@ -115,7 +115,7 @@ parseError :: Token -> Lex a
 parseError token = throwError (Parsing token)
 
 -- | Parse an `Expr` from `Text` or return a `ParseError` if parsing fails
-exprFromText :: Text -> Either ParseError Expr
+exprFromText :: Text -> Either ParseError (Expr Path)
 exprFromText text = case runState (runErrorT parseExpr) initialStatus of
     (x, (position, _)) -> case x of
         Left  e    -> Left (ParseError position e)
