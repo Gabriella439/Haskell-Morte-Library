@@ -65,7 +65,7 @@ VExpr :: { Var }
       | label                                  { V $1 0       }
 
 BExpr :: { Expr Path }
-      :  BExpr AExpr                            { App $1 $2    }
+      : BExpr AExpr                            { App $1 $2    }
       | AExpr                                  { $1           }
 
 AExpr :: { Expr Path }

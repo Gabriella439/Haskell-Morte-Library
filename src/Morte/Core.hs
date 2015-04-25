@@ -84,6 +84,7 @@ import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
 import Data.Foldable (Foldable)
+import Data.Hashable (Hashable(hashWithSalt))
 import Data.Traversable (Traversable)
 import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
@@ -96,6 +97,8 @@ import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Data.Word (Word8)
+import Filesystem.Path.CurrentOS (FilePath, fromText, toText)
+import Prelude hiding (FilePath)
 
 {-| Label for a bound variable
 
@@ -194,10 +197,36 @@ rule Star Star = return Star
 rule Box  Box  = return Box
 rule Box  Star = return Star
 
+toText' :: FilePath -> Text
+toText' = Text.fromStrict . either id id . toText
+
+fromText' :: Text -> FilePath
+fromText' = fromText . Text.toStrict
+
 -- | Path to an external resource
 data Path
-    = File String
-    | URL String
+    = File FilePath
+    | URL  Text
+    deriving (Eq, Show)
+
+instance Binary Path where
+    put (File file) = do
+        put (0 :: Word8)
+        putUtf8 (toText' file)
+    put (URL  url ) = do
+        put (1 :: Word8)
+        putUtf8 url
+
+    get = do
+        n <- get :: Get Word8
+        case n of
+            0 -> File . fromText' <$> getUtf8
+            1 -> URL <$> getUtf8
+            _ -> fail "get Path: Invalid tag byte"
+
+instance Hashable Path where
+    hashWithSalt salt (File file) = hashWithSalt salt (toText' file)
+    hashWithSalt salt (URL  url ) = hashWithSalt salt url
 
 -- | Syntax tree for expressions
 data Expr a

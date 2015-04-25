@@ -1,8 +1,6 @@
 module Main where
 
-import Control.Applicative (empty)
 import Data.Monoid (mempty)
-import Data.Void (Void)
 import qualified Data.Text.Lazy.IO as Text
 import Morte.Core (typeOf, prettyTypeError, prettyExpr, normalize)
 import Morte.Parser (exprFromText, prettyParseError)
@@ -10,15 +8,7 @@ import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
-import Morte.Core (Expr(..), Path)
-
-closed :: Expr Path -> Maybe (Expr Void)
-closed (Const c    ) = pure (Const c)
-closed (Var   v    ) = pure (Var   v)
-closed (Lam x _A  b) = Lam x <$> closed _A <*> closed  b
-closed (Pi  x _A _B) = Pi  x <$> closed _A <*> closed _B
-closed (App f a    ) = App <$> closed f <*> closed a
-closed (Import _   ) = empty
+import Morte.Import (load)
 
 main :: IO ()
 main = do
@@ -35,8 +25,9 @@ main = do
         Left  pe   -> do
             Text.hPutStr stderr (prettyParseError pe)
             exitFailure
-        Right expr -> case closed expr of
-            Just expr' -> case typeOf expr' of
+        Right expr -> do
+            expr' <- load expr
+            case typeOf expr' of
                 Left  te       -> do
                     Text.hPutStr stderr (prettyTypeError te)
                     exitFailure
