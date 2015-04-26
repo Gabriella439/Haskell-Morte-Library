@@ -16,6 +16,7 @@ import Control.Monad.Managed (Managed, managed, with)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
 import Data.Binary (decodeOrFail)
+import Data.Default.Class (def)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text.Lazy as Text
@@ -31,7 +32,7 @@ import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
 import Prelude hiding (FilePath)
 
-import Morte.Core (Expr, Path(..))
+import Morte.Core (Expr, Path(..), URL(..))
 import Morte.Parser (exprFromText)
 
 data ImportError = ImportError
@@ -67,13 +68,17 @@ needManager = Load (do
             return m )
 
 loadRaw :: Path -> Load (Expr Path)
-loadRaw (File file) = do
+loadRaw (IsFile file) = do
     txt <- liftIO (Filesystem.readTextFile file)
     case exprFromText (Text.fromStrict txt) of
         Left  err  -> liftIO (throwIO err)
         Right expr -> return expr 
-loadRaw (URL  url ) = do
-    request  <- liftIO (HTTP.parseUrl (Text.unpack url))
+loadRaw (IsURL  url ) = do
+    let request = def
+            { HTTP.host = urlHost url
+            , HTTP.port = urlPort url
+            , HTTP.path = urlPath url
+            }
     m        <- needManager
     response <- liftIO (HTTP.httpLbs request m)
     case decodeOrFail (HTTP.responseBody response) of

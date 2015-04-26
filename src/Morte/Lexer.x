@@ -28,7 +28,7 @@ $digit = 0-9
 $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 
 $fst       = [A-Za-z_]
-$labelchar = [A-Za-z0-9_]
+$labelchar = [A-Za-z0-9_\.]
 
 $whiteNoNewline = $white # \n
 
@@ -43,6 +43,7 @@ tokens :-
     ")"                                 { \_    -> yield CloseParen            }
     ":"                                 { \_    -> yield Colon                 }
     "@"                                 { \_    -> yield At                    }
+    "#"                                 { \_    -> yield Hash                  }
     "*"                                 { \_    -> yield Star                  }
     "BOX" | "□"                         { \_    -> yield Box                   }
     "->" | "→"                          { \_    -> yield Arrow                 }
@@ -140,6 +141,7 @@ data Token
     | CloseParen
     | Colon
     | At
+    | Hash
     | Star
     | Box
     | Arrow

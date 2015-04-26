@@ -17,19 +17,24 @@ module Morte.Parser (
 import Control.Exception (Exception)
 import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
 import Control.Monad.Trans.State.Strict (State, runState)
+import Data.ByteString (ByteString)
+import Data.ByteString.Lazy (toStrict)
 import Data.Functor.Identity (Identity, runIdentity)
 import Data.Monoid (mempty, (<>))
 import Data.Text.Lazy (Text, unpack)
+import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
+import Filesystem.Path.CurrentOS (FilePath, fromText)
 import Lens.Family.Stock (_1, _2)
 import Lens.Family.State.Strict ((.=), use, zoom)
-import Morte.Core (Var(..), Const(..), Path(..), Expr(..))
+import Morte.Core (Var(..), Const(..), Path(..), URL(..), Expr(..))
 import qualified Morte.Lexer as Lexer
 import Morte.Lexer (Token, Position)
 import Pipes (Producer, hoist, lift, next)
+import Prelude hiding (FilePath)
 
 }
 
@@ -44,6 +49,7 @@ import Pipes (Producer, hoist, lift, next)
     ')'    { Lexer.CloseParen }
     ':'    { Lexer.Colon      }
     '@'    { Lexer.At         }
+    '#'    { Lexer.Hash       }
     '*'    { Lexer.Star       }
     'BOX'  { Lexer.Box        }
     '->'   { Lexer.Arrow      }
@@ -72,7 +78,19 @@ AExpr :: { Expr Path }
       : VExpr                                  { Var $1       }
       | '*'                                    { Const Star   }
       | 'BOX'                                  { Const Box    }
+      | Import                                 { Import $1    }
       | '(' Expr ')'                           { $2           }
+
+Import :: { Path }
+       :                      '#' File         { IsFile $2                   }
+       | '@' Bytes ':' number '#' Bytes        { IsURL (URL $2 $4 $6)        }
+       | '@' Bytes            '#' Bytes        { IsURL (URL $2 22 $4)        }
+
+Bytes :: { ByteString }
+      : label                                  { toStrict (encodeUtf8 $1)    }
+
+File :: { FilePath }
+     : label                                   { fromText (Text.toStrict $1) }
 
 {
 -- | The specific parsing error

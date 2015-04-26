@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE DeriveFoldable     #-}
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
@@ -49,6 +50,7 @@ module Morte.Core (
     Var(..),
     Const(..),
     Path(..),
+    URL(..),
     Expr(..),
     Context,
 
@@ -83,6 +85,7 @@ import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
+import Data.ByteString (ByteString)
 import Data.Foldable (Foldable)
 import Data.Hashable (Hashable(hashWithSalt))
 import Data.Traversable (Traversable)
@@ -98,6 +101,7 @@ import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath, fromText, toText)
+import GHC.Generics (Generic)
 import Prelude hiding (FilePath)
 
 {-| Label for a bound variable
@@ -205,28 +209,34 @@ fromText' = fromText . Text.toStrict
 
 -- | Path to an external resource
 data Path
-    = File FilePath
-    | URL  Text
+    = IsFile FilePath
+    | IsURL  URL
     deriving (Eq, Show)
 
+data URL = URL { urlHost :: ByteString, urlPort :: Int, urlPath :: ByteString }
+    deriving (Eq, Show, Generic)
+
+instance Binary   URL
+instance Hashable URL
+
 instance Binary Path where
-    put (File file) = do
+    put (IsFile file) = do
         put (0 :: Word8)
         putUtf8 (toText' file)
-    put (URL  url ) = do
+    put (IsURL  url ) = do
         put (1 :: Word8)
-        putUtf8 url
+        put url
 
     get = do
         n <- get :: Get Word8
         case n of
-            0 -> File . fromText' <$> getUtf8
-            1 -> URL <$> getUtf8
+            0 -> IsFile . fromText' <$> getUtf8
+            1 -> IsURL <$> get
             _ -> fail "get Path: Invalid tag byte"
 
 instance Hashable Path where
-    hashWithSalt salt (File file) = hashWithSalt salt (toText' file)
-    hashWithSalt salt (URL  url ) = hashWithSalt salt url
+    hashWithSalt salt (IsFile file) = hashWithSalt salt (toText' file)
+    hashWithSalt salt (IsURL  url ) = hashWithSalt salt url
 
 -- | Syntax tree for expressions
 data Expr a
