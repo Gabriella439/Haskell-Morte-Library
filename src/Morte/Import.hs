@@ -15,10 +15,9 @@ import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Managed (Managed, managed, with)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
-import Data.Binary (decodeOrFail)
 import Data.Default.Class (def)
-import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HashMap
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Encoding as Text
 import Data.Traversable (traverse)
@@ -46,13 +45,13 @@ instance Exception ImportError
 
 data Status = Status
     { _stack   :: [Path]
-    , _cache   :: HashMap Path (Expr Void)
+    , _cache   :: Map Path (Expr Void)
     , _manager :: Maybe Manager
     }
 
 makeLenses ''Status
 stack   :: Functor f => LensLike' f Status [Path]
-cache   :: Functor f => LensLike' f Status (HashMap Path (Expr Void))
+cache   :: Functor f => LensLike' f Status (Map Path (Expr Void))
 manager :: Functor f => LensLike' f Status (Maybe Manager)
 
 newtype Load a = Load { runLoad :: StateT Status Managed a }
@@ -97,13 +96,13 @@ loadStatic path = Load (do
         then liftIO (throwIO (ImportError paths path))
         else do
             m <- zoom cache get
-            case HashMap.lookup path m of
+            case Map.lookup path m of
                 Just expr -> return expr
                 Nothing   -> do
                     expr' <- runLoad (loadDynamic path)
                     case traverse (\_ -> Nothing) expr' of
                         Just expr -> do
-                            zoom cache (put $! HashMap.insert path expr m)
+                            zoom cache (put $! Map.insert path expr m)
                             return expr
                         Nothing   -> do
                             zoom stack (put $! path:paths)
@@ -118,4 +117,4 @@ load expr = with
     (evalStateT (runLoad (fmap join (traverse loadStatic expr))) status)
     return
   where
-    status = Status [] HashMap.empty Nothing
+    status = Status [] Map.empty Nothing

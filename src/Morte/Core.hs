@@ -1,8 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFunctor      #-}
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -86,9 +82,8 @@ import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
 import Data.ByteString (ByteString)
-import Data.Foldable (Foldable)
-import Data.Hashable (Hashable(hashWithSalt))
-import Data.Traversable (Traversable)
+import Data.Foldable (Foldable(..))
+import Data.Traversable (Traversable(..))
 import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
 import Data.Text ()  -- For the `IsString` instance
@@ -100,8 +95,7 @@ import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Data.Word (Word8)
-import Filesystem.Path.CurrentOS (FilePath, fromText, toText)
-import GHC.Generics (Generic)
+import Filesystem.Path.CurrentOS (FilePath)
 import Prelude hiding (FilePath)
 
 {-| Label for a bound variable
@@ -201,42 +195,14 @@ rule Star Star = return Star
 rule Box  Box  = return Box
 rule Box  Star = return Star
 
-toText' :: FilePath -> Text
-toText' = Text.fromStrict . either id id . toText
-
-fromText' :: Text -> FilePath
-fromText' = fromText . Text.toStrict
-
 -- | Path to an external resource
 data Path
     = IsFile FilePath
     | IsURL  URL
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 data URL = URL { urlHost :: ByteString, urlPort :: Int, urlPath :: ByteString }
-    deriving (Eq, Show, Generic)
-
-instance Binary   URL
-instance Hashable URL
-
-instance Binary Path where
-    put (IsFile file) = do
-        put (0 :: Word8)
-        putUtf8 (toText' file)
-    put (IsURL  url ) = do
-        put (1 :: Word8)
-        put url
-
-    get = do
-        n <- get :: Get Word8
-        case n of
-            0 -> IsFile . fromText' <$> getUtf8
-            1 -> IsURL <$> get
-            _ -> fail "get Path: Invalid tag byte"
-
-instance Hashable Path where
-    hashWithSalt salt (IsFile file) = hashWithSalt salt (toText' file)
-    hashWithSalt salt (IsURL  url ) = hashWithSalt salt url
+    deriving (Eq, Ord, Show)
 
 -- | Syntax tree for expressions
 data Expr a
@@ -254,7 +220,16 @@ data Expr a
     | App (Expr a) (Expr a)
     -- | > Import file    ~  #file
     | Import a
-    deriving (Functor, Foldable, Traversable, Show)
+    deriving (Show)
+
+instance Functor Expr where
+    fmap k e = case e of
+        Const c     -> Const c
+        Var   v     -> Var v
+        Lam x _A  b -> Lam x (fmap k _A) (fmap k  b)
+        Pi  x _A _B -> Pi  x (fmap k _A) (fmap k _B)
+        App f a     -> App (fmap k f) (fmap k a)
+        Import p    -> Import (k p)
 
 instance Applicative Expr where
     pure = Import
@@ -277,6 +252,24 @@ instance Monad Expr where
         Pi  x _A _B -> Pi  x (_A >>= k) (_B >>= k)
         App f a     -> App (f >>= k) (a >>= k)
         Import r    -> k r
+
+instance Foldable Expr where
+    foldMap k e = case e of
+        Const _     -> mempty
+        Var   _     -> mempty
+        Lam _ _A  b -> foldMap k _A <> foldMap k  b
+        Pi  _ _A _B -> foldMap k _A <> foldMap k _B
+        App f a     -> foldMap k f <> foldMap k a
+        Import p    -> k p
+
+instance Traversable Expr where
+    traverse k e = case e of
+        Const c     -> pure (Const c)
+        Var   v     -> pure (Var v)
+        Lam x _A  b -> Lam x <$> traverse k _A <*> traverse k  b
+        Pi  x _A _B -> Pi  x <$> traverse k _A <*> traverse k _B
+        App f a     -> App <$> traverse k f <*> traverse k a
+        Import p    -> Import <$> k p
 
 lookupN :: Eq a => a -> [(a, b)] -> Int -> Maybe b
 lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n

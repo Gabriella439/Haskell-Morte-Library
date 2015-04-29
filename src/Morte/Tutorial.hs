@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+
 {-| Morte is a minimalist implementation of the calculus of constructions that
     comes with a parser, type-checker, optimizer, and pretty-printer.
 
