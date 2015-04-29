@@ -28,7 +28,7 @@ $digit = 0-9
 $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 
 $fst       = [A-Za-z_]
-$labelchar = [A-Za-z0-9_\.]
+$labelchar = [A-Za-z0-9_\.\/]
 
 $whiteNoNewline = $white # \n
 
