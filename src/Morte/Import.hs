@@ -20,6 +20,7 @@ import Data.Default.Class (def)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text.Lazy as Text
+import qualified Data.Text.Lazy.Encoding as Text
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
 import Data.Void (Void)
@@ -67,26 +68,30 @@ needManager = Load (do
             zoom manager (put (Just m))
             return m )
 
-loadRaw :: Path -> Load (Expr Path)
-loadRaw (IsFile file) = do
-    txt <- liftIO (Filesystem.readTextFile file)
-    case exprFromText (Text.fromStrict txt) of
+-- | Load a `Path` as a \"dynamic\" expression (without resolving any imports)
+loadDynamic :: Path -> Load (Expr Path)
+loadDynamic p = do
+    txt <- case p of
+        IsFile file -> do
+            liftIO (fmap Text.fromStrict (Filesystem.readTextFile file))
+        IsURL  url  -> do
+            let request = def
+                    { HTTP.host = urlHost url
+                    , HTTP.port = urlPort url
+                    , HTTP.path = urlPath url
+                    }
+            m        <- needManager
+            response <- liftIO (HTTP.httpLbs request m)
+            case Text.decodeUtf8' (HTTP.responseBody response) of
+                Left  err -> liftIO (throwIO err)
+                Right txt -> return txt
+    case exprFromText txt of
         Left  err  -> liftIO (throwIO err)
         Right expr -> return expr 
-loadRaw (IsURL  url ) = do
-    let request = def
-            { HTTP.host = urlHost url
-            , HTTP.port = urlPort url
-            , HTTP.path = urlPath url
-            }
-    m        <- needManager
-    response <- liftIO (HTTP.httpLbs request m)
-    case decodeOrFail (HTTP.responseBody response) of
-        Left  (_, _, err ) -> liftIO (throwIO (userError err))
-        Right (_, _, expr) -> return expr
 
-loadAll :: Path -> Load (Expr Void)
-loadAll path = Load (do
+-- | Load a `Path` as a \"static\" expression (with all imports resolved)
+loadStatic :: Path -> Load (Expr Void)
+loadStatic path = Load (do
     paths <- zoom stack get
     if path `elem` paths
         then liftIO (throwIO (ImportError paths path))
@@ -95,20 +100,22 @@ loadAll path = Load (do
             case HashMap.lookup path m of
                 Just expr -> return expr
                 Nothing   -> do
-                    expr' <- runLoad (loadRaw path)
+                    expr' <- runLoad (loadDynamic path)
                     case traverse (\_ -> Nothing) expr' of
                         Just expr -> do
                             zoom cache (put $! HashMap.insert path expr m)
                             return expr
                         Nothing   -> do
                             zoom stack (put $! path:paths)
-                            expr <- runLoad (fmap join (traverse loadAll expr'))
+                            expr <- runLoad
+                                (fmap join (traverse loadStatic expr'))
                             zoom stack (put paths)
                             return expr )
 
+-- | Resolve all imports within an expression
 load :: Expr Path -> IO (Expr Void)
 load expr = with
-    (evalStateT (runLoad (fmap join (traverse loadAll expr))) status)
+    (evalStateT (runLoad (fmap join (traverse loadStatic expr))) status)
     return
   where
     status = Status [] HashMap.empty Nothing
