@@ -82,15 +82,16 @@ AExpr :: { Expr Path }
       | '(' Expr ')'                           { $2           }
 
 Import :: { Path }
-       :                      '#' File         { IsFile $2                   }
-       | '@' Bytes ':' number '#' Bytes        { IsURL (URL $2 $4 $6)        }
-       | '@' Bytes            '#' Bytes        { IsURL (URL $2 22 $4)        }
+       :                      '#' File  { IsFile $2                       }
+       | '@' Bytes ':' number '#' Bytes { IsURL (URL $2          $4   $6) }
+       | '@' Bytes            '#' Bytes { IsURL (URL $2          1999 $4) }
+       | '@'                  '#' Bytes { IsURL (URL "localhost" 1999 $3) }
 
 Bytes :: { ByteString }
-      : label                                  { toStrict (encodeUtf8 $1)    }
+      : label                           { toStrict (encodeUtf8 $1)    }
 
 File :: { FilePath }
-     : label                                   { fromText (Text.toStrict $1) }
+     : label                            { fromText (Text.toStrict $1) }
 
 {
 -- | The specific parsing error
