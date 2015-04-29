@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Morte language.  This
@@ -47,6 +48,7 @@ module Morte.Core (
     Const(..),
     Path(..),
     URL(..),
+    X(..),
     Expr(..),
     Context,
 
@@ -93,7 +95,6 @@ import qualified Data.Text.Lazy as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
-import Data.Void (Void, absurd)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
 import Prelude hiding (FilePath)
@@ -185,11 +186,11 @@ instance Binary Const where
 instance NFData Const where
     rnf c = seq c ()
 
-axiom :: Const -> Either (TypeError a) Const
+axiom :: Const -> Either TypeError Const
 axiom Star = return Box
 axiom Box  = Left (TypeError [] (Const Box) (Untyped Box))
 
-rule :: Const -> Const -> Either (TypeError a) Const
+rule :: Const -> Const -> Either TypeError Const
 rule Star Box  = return Box
 rule Star Star = return Star
 rule Box  Box  = return Box
@@ -201,8 +202,22 @@ data Path
     | IsURL  URL
     deriving (Eq, Ord, Show)
 
+-- | Path to a network resource
 data URL = URL { urlHost :: ByteString, urlPort :: Int, urlPath :: ByteString }
     deriving (Eq, Ord, Show)
+
+{-| Like `Data.Void.Void`, except with an `NFData` instance in order to avoid
+    orphan instances
+-}
+newtype X = X { absurd :: forall a . a }
+
+instance Eq X where
+    _ == _ = True
+
+instance Show X where
+    show = absurd
+
+instance NFData X
 
 -- | Syntax tree for expressions
 data Expr a
@@ -278,7 +293,7 @@ lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
                             | otherwise = Nothing
 lookupN _  []             _             = Nothing
 
-lookupCtx :: Var -> Context a -> Maybe (Expr a)
+lookupCtx :: Var -> Context -> Maybe (Expr X)
 lookupCtx (V x n) ctx = lookupN x ctx n
 
 match :: Text -> Int -> Text -> Int -> [(Text, Text)] -> Bool
@@ -289,10 +304,10 @@ match xL nL xR nR ((xL', xR'):xs) = nL' `seq` nR' `seq` match xL nL' xR nR' xs
     nL' = if xL == xL' then nL - 1 else nL
     nR' = if xR == xR' then nR - 1 else nR
 
-instance Eq (Expr Void) where
+instance Eq (Expr X) where
     eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
       where
-        go :: Expr Void -> Expr Void -> State [(Text, Text)] Bool
+        go :: Expr X -> Expr X -> State [(Text, Text)] Bool
         go (Const cL) (Const cR) = return (cL == cR)
         go (Var (V xL nL)) (Var (V xR nR)) = do
             ctx <- State.get
@@ -374,19 +389,19 @@ instance NFData a => NFData (Expr a) where
     refers to the @n@th occurrence of @x@ in the `Context` (using 0-based
     numbering).
 -}
-type Context a = [(Text, Expr a)]
+type Context = [(Text, Expr X)]
 
 -- | The specific type error
-data TypeMessage a
+data TypeMessage
     = UnboundVariable
-    | InvalidInputType (Expr a)
-    | InvalidOutputType (Expr a)
+    | InvalidInputType (Expr X)
+    | InvalidOutputType (Expr X)
     | NotAFunction
-    | TypeMismatch (Expr a) (Expr a)
+    | TypeMismatch (Expr X) (Expr X)
     | Untyped Const
     deriving (Show)
 
-instance NFData a => NFData (TypeMessage a) where
+instance NFData TypeMessage where
     rnf tm = case tm of
         UnboundVariable     -> ()
         InvalidInputType e  -> rnf e
@@ -396,18 +411,18 @@ instance NFData a => NFData (TypeMessage a) where
         Untyped c           -> rnf c
 
 -- | A structured type error that includes context
-data TypeError a = TypeError
-    { context     :: Context a
-    , current     :: Expr a
-    , typeMessage :: TypeMessage a
+data TypeError = TypeError
+    { context     :: Context
+    , current     :: Expr X
+    , typeMessage :: TypeMessage
     } deriving (Typeable)
 
-instance Show (TypeError Void) where
+instance Show TypeError where
     show = unpack . prettyTypeError
 
-instance Exception (TypeError Void)
+instance Exception TypeError
 
-instance NFData a => NFData (TypeError a) where
+instance NFData TypeError where
     rnf (TypeError ctx crr tym) = rnf ctx `seq` rnf crr `seq` rnf tym
 
 -- | Render a pretty-printed `Const` as a `Builder`
@@ -422,10 +437,10 @@ buildVar (V txt n) =
     fromLazyText txt <> if n == 0 then mempty else "@" <> decimal n
 
 -- | Render a pretty-printed `Expr` as a `Builder`
-buildExpr :: Expr Void -> Builder
+buildExpr :: Expr X -> Builder
 buildExpr = go False False
   where
-    go :: Bool -> Bool -> Expr Void -> Builder
+    go :: Bool -> Bool -> Expr X -> Builder
     go parenBind parenApp e = case e of
         Const c    -> buildConst c
         Var x      -> buildVar x
@@ -468,7 +483,7 @@ buildExpr = go False False
 
     ... because the @a\@1@ would misleadingly appear to be an unbound variable.
 -}
-used :: Text -> Expr Void -> Bool
+used :: Text -> Expr X -> Bool
 used x e0 = go e0 0
   where
     go e n = case e of
@@ -485,7 +500,7 @@ used x e0 = go e0 0
         Import p                 -> absurd p
 
 -- | Render a pretty-printed `TypeMessage` as a `Builder`
-buildTypeMessage :: TypeMessage Void -> Builder
+buildTypeMessage :: TypeMessage -> Builder
 buildTypeMessage msg = case msg of
     UnboundVariable          ->
             "Error: Unbound variable\n"
@@ -508,7 +523,7 @@ buildTypeMessage msg = case msg of
             "Error: " <> buildConst c <> " has no type\n"
 
 -- | Render a pretty-printed `TypeError` as a `Builder`
-buildTypeError :: TypeError Void -> Builder
+buildTypeError :: TypeError -> Builder
 buildTypeError (TypeError ctx expr msg)
     =   "\n"
     <>  (    if Text.null (toLazyText buildContext )
@@ -529,7 +544,7 @@ buildTypeError (TypeError ctx expr msg)
 
 > subst x n C B  ~  B[x@n := C]
 -}
-subst :: Text -> Int -> Expr Void -> Expr Void -> Expr Void
+subst :: Text -> Int -> Expr X -> Expr X -> Expr X
 subst x n e' e = case e of
     Lam x' _A  b  -> Lam x' (subst x n e' _A)  b'
       where
@@ -547,7 +562,7 @@ subst x n e' e = case e of
 {-| @shift n x@ adds @n@ to the index of all free variables named @x@ within an
     `Expr`
 -}
-shift :: Int -> Text -> Expr Void -> Expr Void
+shift :: Int -> Text -> Expr X -> Expr X
 shift d x0 e0 = go e0 0
   where
     go e c = case e of
@@ -571,7 +586,7 @@ shift d x0 e0 = go e0 0
     is not necessary for just type-checking.  If you actually care about the
     returned type then you may want to `normalize` it afterwards.
 -}
-typeWith :: Context Void -> Expr Void -> Either (TypeError Void) (Expr Void)
+typeWith :: Context -> Expr X -> Either TypeError (Expr X)
 typeWith ctx e = case e of
     Const c     -> fmap Const (axiom c)
     Var x       -> case lookupCtx x ctx of
@@ -615,11 +630,11 @@ typeWith ctx e = case e of
     expression must be closed (i.e. no free variables), otherwise type-checking
     will fail.
 -}
-typeOf :: Expr Void -> Either (TypeError Void) (Expr Void)
+typeOf :: Expr X -> Either TypeError (Expr X)
 typeOf = typeWith []
 
 -- | Reduce an expression to weak-head normal form
-whnf :: Expr Void -> Expr Void
+whnf :: Expr X -> Expr X
 whnf e = case e of
     App f a -> case whnf f of
         Lam x _A b -> whnf (shift (-1) x b')  -- Beta reduce
@@ -630,7 +645,7 @@ whnf e = case e of
     _       -> e
 
 -- | Returns whether a variable is free in an expression
-freeIn :: Var -> Expr Void -> Bool
+freeIn :: Var -> Expr X -> Bool
 freeIn v@(V x n) = go
   where
     go e = case e of
@@ -654,7 +669,7 @@ freeIn v@(V x n) = go
     expressions before normalizing them since normalization can convert an
     ill-typed expression into a well-typed expression.
 -}
-normalize :: Expr Void -> Expr Void
+normalize :: Expr X -> Expr X
 normalize e = case e of
     Lam x _A b -> case b' of
         App f a -> case a of
@@ -684,9 +699,9 @@ normalize e = case e of
 
     The result is a syntactically valid Morte program
 -}
-prettyExpr :: Expr Void -> Text
+prettyExpr :: Expr X -> Text
 prettyExpr = toLazyText . buildExpr
 
 -- | Pretty-print a type error
-prettyTypeError :: TypeError Void -> Text
+prettyTypeError :: TypeError -> Text
 prettyTypeError = toLazyText . buildTypeError

@@ -21,7 +21,6 @@ import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Encoding as Text
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
-import Data.Void (Void)
 import Filesystem as Filesystem
 import Lens.Family (LensLike')
 import Lens.Family.State.Strict (zoom)
@@ -30,9 +29,10 @@ import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
 import Prelude hiding (FilePath)
 
-import Morte.Core (Expr, Path(..), URL(..))
+import Morte.Core (Expr, Path(..), URL(..), X(..))
 import Morte.Parser (exprFromText)
 
+-- | An import expression failed because of a cyclic import
 data ImportError = ImportError
     { importStack :: [Path]
     , cyclicImport :: Path
@@ -43,14 +43,14 @@ instance Exception ImportError
 
 data Status = Status
     { _stack   :: [Path]
-    , _cache   :: Map Path (Expr Void)
+    , _cache   :: Map Path (Expr X)
     , _manager :: Maybe Manager
     }
 
 stack :: Functor f => LensLike' f Status [Path]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-cache :: Functor f => LensLike' f Status (Map Path (Expr Void))
+cache :: Functor f => LensLike' f Status (Map Path (Expr X))
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
 manager :: Functor f => LensLike' f Status (Maybe Manager)
@@ -106,7 +106,7 @@ loadDynamic p = do
         Right expr -> return expr 
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
-loadStatic :: Path -> Load (Expr Void)
+loadStatic :: Path -> Load (Expr X)
 loadStatic path = Load (do
     paths <- zoom stack get
     if path `elem` paths
@@ -129,7 +129,7 @@ loadStatic path = Load (do
                             return expr )
 
 -- | Resolve all imports within an expression
-load :: Expr Path -> IO (Expr Void)
+load :: Expr Path -> IO (Expr X)
 load expr = with
     (evalStateT (runLoad (fmap join (traverse loadStatic expr))) status)
     return
