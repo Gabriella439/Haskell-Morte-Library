@@ -85,7 +85,7 @@ Import :: { Path }
        :                      '#' File  { IsFile $2                       }
        | '@' Bytes ':' number '#' Bytes { IsURL (URL $2          $4   $6) }
        | '@' Bytes            '#' Bytes { IsURL (URL $2          1999 $4) }
-       | '@'                  '#' Bytes { IsURL (URL "localhost" 1999 $3) }
+       | '@'                      Bytes { IsURL (URL "localhost" 1999 $2) }
 
 Bytes :: { ByteString }
       : label                           { toStrict (encodeUtf8 $1)    }
