@@ -1,6 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Morte.Import (
     -- * Import
@@ -8,7 +7,7 @@ module Morte.Import (
     , ImportError(..)
     ) where
 
-import Control.Applicative (Applicative)
+import Control.Applicative (Applicative(..))
 import Control.Exception (Exception, throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -26,7 +25,6 @@ import Data.Void (Void)
 import Filesystem as Filesystem
 import Lens.Family (LensLike')
 import Lens.Family.State.Strict (zoom)
-import Lens.Family.TH (makeLenses)
 import Network.HTTP.Client (Manager)
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
@@ -49,13 +47,32 @@ data Status = Status
     , _manager :: Maybe Manager
     }
 
-makeLenses ''Status
-stack   :: Functor f => LensLike' f Status [Path]
-cache   :: Functor f => LensLike' f Status (Map Path (Expr Void))
+stack :: Functor f => LensLike' f Status [Path]
+stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
+
+cache :: Functor f => LensLike' f Status (Map Path (Expr Void))
+cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
+
 manager :: Functor f => LensLike' f Status (Maybe Manager)
+manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
 
 newtype Load a = Load { runLoad :: StateT Status Managed a }
-    deriving (Functor, Applicative, Monad, MonadIO)
+
+instance Functor Load where
+    fmap f (Load m) = Load (fmap f m)
+
+instance Applicative Load where
+    pure a = Load (pure a)
+
+    Load mf <*> Load mx = Load (mf <*> mx)
+
+instance Monad Load where
+    return a = Load (return a)
+
+    m >>= f = Load (runLoad m >>= \x -> runLoad (f x))
+
+instance MonadIO Load where
+    liftIO io = Load (liftIO io)
 
 needManager :: Load Manager
 needManager = Load (do
