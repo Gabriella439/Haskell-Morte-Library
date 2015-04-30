@@ -34,8 +34,8 @@ $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 
 $fst        = [A-Za-z_]
 $labelchar  = [A-Za-z0-9_]
-$domainchar = ~[\:\/]
-$pathchar   = ~$white
+$domainchar = [A-Za-z0-9\.]
+$pathchar   = [A-Za-z0-9\.\/]
 
 $whiteNoNewline = $white # \n
 
