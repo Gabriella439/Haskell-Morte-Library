@@ -1,6 +1,68 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -Wall #-}
 
+{-| Morte lets you import external expressions located either in local files or
+    hosted on network endpoints.
+
+    To import a local file as an expression, just prepend the file path with a
+    hash tag.  For example, suppose we had the following three local files:
+
+    > -- id
+    > \(a : *) -> \(x : a) -> x
+
+    > -- Bool
+    > forall (Bool : *) -> forall (True : Bool) -> forall (False : Bool) -> True
+
+    > -- True
+    > \(Bool : *) -> \(True : Bool) -> \(False : Bool) -> True
+
+    You could then reference them within a Morte expression using this syntax:
+
+    > #id #Bool #True
+
+    ... which would embed their expressions directly within the syntax tree:
+
+    > -- ... expands out to:
+    > (\(a : *) -> \(x : a) -> x)
+    >     (forall (Bool : *) -> forall (True : Bool) -> forall (False : Bool) -> True)
+    >     (\(Bool : *) -> \(True : Bool) -> \(False : Bool) -> True)
+
+    Imported expressions may contain imports of their own, too, which will
+    continue to be resolved.  However, Morte will prevent cyclic imports.  For
+    example, if you had these two files:
+
+    > -- foo
+    > #bar
+
+    > -- bar
+    > #foo
+
+    ... Morte would throw the following exception if you tried to import @foo@:
+
+    > morte: ImportError {importStack = [IsFile (FilePath "bar"),IsFile (FilePath "foo")], cyclicImport = IsFile (FilePath "foo")}
+
+    You can also import expressions hosted on network endpoints.  Just use this
+    syntax:
+
+    > @host:port/path
+
+    For example, if our @id@ expression were hosted at
+    @https://example.com:1999/id@, then we would use:
+
+    > -- Note: no 'https://'
+    > @example.com:1999/id
+
+    If you omit the port, Morte will default to the standard Morte port of 1999:
+
+    > -- Same thing
+    > @example.com/id
+
+    Also, if you omit the host, Morte will default to @localhost@:
+
+    > -- Equivalent to: @localhost/id
+    > /id
+-}
+
 module Morte.Import (
     -- * Import
       load
@@ -34,8 +96,8 @@ import Morte.Parser (exprFromText)
 
 -- | An import expression failed because of a cyclic import
 data ImportError = ImportError
-    { importStack :: [Path]
-    , cyclicImport :: Path
+    { importStack :: [Path] -- ^ Imports resolved so far
+    , cyclicImport :: Path  -- ^ The offending cyclic import
     }
   deriving (Typeable, Show)
 
