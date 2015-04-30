@@ -1,8 +1,10 @@
 module Main (main) where
 
 import Morte.Core
+import Morte.Import (load)
 import Morte.Parser (ParseError, exprFromText, prettyParseError)
 
+import Control.Monad     (foldM)
 import Criterion.Main    (Benchmark, defaultMain, env, bgroup, bench, nf)
 import Data.Text.Lazy    (Text)
 import qualified Data.Text.Lazy as T
@@ -23,20 +25,24 @@ readMtFile filename = do
     mtFile <- readFile path
     return (filename, mtFile)
 
-partitionExpr :: (String, Text) -> ([(String, ParseError)],[(String, Expr)])
-              -> ([(String, ParseError)],[(String, Expr)])
-partitionExpr (filename, contents) (pe,ps) =
+partitionExpr
+    :: ([(String, ParseError)],[(String, Expr X)])
+    -> (String, Text)
+    -> IO ([(String, ParseError)],[(String, Expr X)])
+partitionExpr (pe, ps) (filename, contents) =
     case exprFromText contents of
-        Left  perr -> ((filename,perr):pe,ps)
-        Right expr -> (pe,(filename,expr):ps)
+        Left  perr -> return ((filename,perr):pe,ps)
+        Right expr -> do
+            expr' <- load expr
+            return (pe,(filename,expr'):ps)
 
 pprFileParseError :: (String, ParseError) -> Text
 pprFileParseError (fn,pe) = T.unlines [T.pack fn, prettyParseError pe]
 
-srcEnv :: IO [(String, Expr)]
+srcEnv :: IO [(String, Expr X)]
 srcEnv = do
     mtFiles <- mapM readMtFile benchFilenames
-    let (pe,ps) = foldr partitionExpr ([],[]) mtFiles
+    (pe,ps) <- foldM partitionExpr ([],[]) mtFiles
     mapM_ (hPutStrLn stderr . pprFileParseError) pe
     return ps
 
@@ -45,7 +51,7 @@ main = defaultMain [
       env srcEnv $ bgroup "source" . map benchExpr
     ]
 
-benchExpr :: (String, Expr) -> Benchmark
+benchExpr :: (String, Expr X) -> Benchmark
 benchExpr (tag,expr) = bgroup tag [
       bench "normalize" $ nf normalize expr
     , bench "equality"  $ nf (expr ==) expr

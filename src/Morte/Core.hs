@@ -1,4 +1,7 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Morte language.  This
@@ -43,6 +46,9 @@ module Morte.Core (
     -- * Syntax
     Var(..),
     Const(..),
+    Path(..),
+    URL(..),
+    X(..),
     Expr(..),
     Context,
 
@@ -69,7 +75,7 @@ module Morte.Core (
     buildTypeError,
     ) where
 
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative (Applicative(pure, (<*>)), (<$>))
 import Control.DeepSeq
 import Control.Exception (Exception)
 import Control.Monad.Trans.State (State, evalState)
@@ -77,6 +83,9 @@ import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
+import Data.ByteString (ByteString)
+import Data.Foldable (Foldable(..))
+import Data.Traversable (Traversable(..))
 import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
 import Data.Text ()  -- For the `IsString` instance
@@ -87,6 +96,8 @@ import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
+import Filesystem.Path.CurrentOS (FilePath)
+import Prelude hiding (FilePath)
 
 {-| Label for a bound variable
 
@@ -185,21 +196,95 @@ rule Star Star = return Star
 rule Box  Box  = return Box
 rule Box  Star = return Star
 
+-- | Path to an external resource
+data Path
+    = IsFile FilePath
+    | IsURL  URL
+    deriving (Eq, Ord, Show)
+
+-- | Path to a network resource
+data URL = URL { urlHost :: ByteString, urlPort :: Int, urlPath :: ByteString }
+    deriving (Eq, Ord, Show)
+
+{-| Like `Data.Void.Void`, except with an `NFData` instance in order to avoid
+    orphan instances
+-}
+newtype X = X { absurd :: forall a . a }
+
+instance Eq X where
+    _ == _ = True
+
+instance Show X where
+    show = absurd
+
+instance NFData X
+
 -- | Syntax tree for expressions
-data Expr
+data Expr a
     -- | > Const c        ~  c
     = Const Const
     -- | > Var (V x 0)    ~  x
     --   > Var (V x n)    ~  x@n
     | Var Var
     -- | > Lam x     A b  ~  λ(x : A) → b
-    | Lam Text Expr Expr
+    | Lam Text (Expr a) (Expr a)
     -- | > Pi x      A B  ~  ∀(x : A) → B
     --   > Pi unused A B  ~        A  → B
-    | Pi  Text Expr Expr
+    | Pi  Text (Expr a) (Expr a)
     -- | > App f a        ~  f a
-    | App Expr Expr
+    | App (Expr a) (Expr a)
+    -- | > Import file    ~  #file
+    | Import a
     deriving (Show)
+
+instance Functor Expr where
+    fmap k e = case e of
+        Const c     -> Const c
+        Var   v     -> Var v
+        Lam x _A  b -> Lam x (fmap k _A) (fmap k  b)
+        Pi  x _A _B -> Pi  x (fmap k _A) (fmap k _B)
+        App f a     -> App (fmap k f) (fmap k a)
+        Import p    -> Import (k p)
+
+instance Applicative Expr where
+    pure = Import
+
+    mf <*> mx = case mf of
+        Const c     -> Const c
+        Var   v     -> Var v
+        Lam x _A  b -> Lam x (_A <*> mx) ( b <*> mx)
+        Pi  x _A _B -> Pi  x (_A <*> mx) (_B <*> mx)
+        App f a     -> App (f <*> mx) (a <*> mx)
+        Import f    -> fmap f mx
+
+instance Monad Expr where
+    return = Import
+
+    m >>= k = case m of
+        Const c     -> Const c
+        Var   v     -> Var v
+        Lam x _A  b -> Lam x (_A >>= k) ( b >>= k)
+        Pi  x _A _B -> Pi  x (_A >>= k) (_B >>= k)
+        App f a     -> App (f >>= k) (a >>= k)
+        Import r    -> k r
+
+instance Foldable Expr where
+    foldMap k e = case e of
+        Const _     -> mempty
+        Var   _     -> mempty
+        Lam _ _A  b -> foldMap k _A <> foldMap k  b
+        Pi  _ _A _B -> foldMap k _A <> foldMap k _B
+        App f a     -> foldMap k f <> foldMap k a
+        Import p    -> k p
+
+instance Traversable Expr where
+    traverse k e = case e of
+        Const c     -> pure (Const c)
+        Var   v     -> pure (Var v)
+        Lam x _A  b -> Lam x <$> traverse k _A <*> traverse k  b
+        Pi  x _A _B -> Pi  x <$> traverse k _A <*> traverse k _B
+        App f a     -> App <$> traverse k f <*> traverse k a
+        Import p    -> Import <$> k p
 
 lookupN :: Eq a => a -> [(a, b)] -> Int -> Maybe b
 lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
@@ -208,7 +293,7 @@ lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
                             | otherwise = Nothing
 lookupN _  []             _             = Nothing
 
-lookupCtx :: Var -> Context -> Maybe Expr
+lookupCtx :: Var -> Context -> Maybe (Expr X)
 lookupCtx (V x n) ctx = lookupN x ctx n
 
 match :: Text -> Int -> Text -> Int -> [(Text, Text)] -> Bool
@@ -219,10 +304,10 @@ match xL nL xR nR ((xL', xR'):xs) = nL' `seq` nR' `seq` match xL nL' xR nR' xs
     nL' = if xL == xL' then nL - 1 else nL
     nR' = if xR == xR' then nR - 1 else nR
 
-instance Eq Expr where
+instance Eq (Expr X) where
     eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
       where
-        go :: Expr -> Expr -> State [(Text, Text)] Bool
+        go :: Expr X -> Expr X -> State [(Text, Text)] Bool
         go (Const cL) (Const cR) = return (cL == cR)
         go (Var (V xL nL)) (Var (V xR nR)) = do
             ctx <- State.get
@@ -245,9 +330,10 @@ instance Eq Expr where
             b1 <- go fL fR
             b2 <- go aL aR
             return (b1 && b2)
+        go (Import pL) (Import pR) = return (pL == pR)
         go _ _ = return False
 
-instance Binary Expr where
+instance Binary a => Binary (Expr a) where
     put e = case e of
         Const c    -> do
             put (0 :: Word8)
@@ -269,6 +355,9 @@ instance Binary Expr where
             put (4 :: Word8)
             put f
             put a
+        Import p    -> do
+            put (5 :: Word8)
+            put p
 
     get = do
         n <- get :: Get Word8
@@ -278,19 +367,21 @@ instance Binary Expr where
             2 -> Lam <$> getUtf8 <*> get <*> get
             3 -> Pi  <$> getUtf8 <*> get <*> get
             4 -> App <$> get <*> get
+            5 -> Import <$> get
             _ -> fail "get Expr: Invalid tag byte"
 
-instance IsString Expr
+instance IsString (Expr a)
   where
     fromString str = Var (fromString str)
 
-instance NFData Expr where
+instance NFData a => NFData (Expr a) where
     rnf e = case e of
         Const c     -> rnf c
         Var   v     -> rnf v
         Lam x _A b  -> rnf x `seq` rnf _A `seq` rnf b
         Pi  x _A _B -> rnf x `seq` rnf _A `seq` rnf _B
         App f a     -> rnf f `seq` rnf a
+        Import p    -> rnf p
 
 {-| Bound variable names and their types
 
@@ -298,15 +389,15 @@ instance NFData Expr where
     refers to the @n@th occurrence of @x@ in the `Context` (using 0-based
     numbering).
 -}
-type Context = [(Text, Expr)]
+type Context = [(Text, Expr X)]
 
 -- | The specific type error
 data TypeMessage
     = UnboundVariable
-    | InvalidInputType Expr
-    | InvalidOutputType Expr
+    | InvalidInputType (Expr X)
+    | InvalidOutputType (Expr X)
     | NotAFunction
-    | TypeMismatch Expr Expr
+    | TypeMismatch (Expr X) (Expr X)
     | Untyped Const
     deriving (Show)
 
@@ -322,7 +413,7 @@ instance NFData TypeMessage where
 -- | A structured type error that includes context
 data TypeError = TypeError
     { context     :: Context
-    , current     :: Expr
+    , current     :: Expr X
     , typeMessage :: TypeMessage
     } deriving (Typeable)
 
@@ -346,10 +437,10 @@ buildVar (V txt n) =
     fromLazyText txt <> if n == 0 then mempty else "@" <> decimal n
 
 -- | Render a pretty-printed `Expr` as a `Builder`
-buildExpr :: Expr -> Builder
+buildExpr :: Expr X -> Builder
 buildExpr = go False False
   where
-    go :: Bool -> Bool -> Expr -> Builder
+    go :: Bool -> Bool -> Expr X -> Builder
     go parenBind parenApp e = case e of
         Const c    -> buildConst c
         Var x      -> buildVar x
@@ -375,6 +466,7 @@ buildExpr = go False False
                 (if parenApp then "(" else "")
             <>  go True False f <> " " <> go True True a
             <>  (if parenApp then ")" else "")
+        Import p   -> absurd p
 
 {-| Determine whether a `Pi`-bound variable should be displayed
 
@@ -391,7 +483,7 @@ buildExpr = go False False
 
     ... because the @a\@1@ would misleadingly appear to be an unbound variable.
 -}
-used :: Text -> Expr -> Bool
+used :: Text -> Expr X -> Bool
 used x e0 = go e0 0
   where
     go e n = case e of
@@ -405,6 +497,7 @@ used x e0 = go e0 0
             n' = if x == x' then n + 1 else n
         App f a                  -> go f n || go a n
         Const _                  -> False
+        Import p                 -> absurd p
 
 -- | Render a pretty-printed `TypeMessage` as a `Builder`
 buildTypeMessage :: TypeMessage -> Builder
@@ -451,7 +544,7 @@ buildTypeError (TypeError ctx expr msg)
 
 > subst x n C B  ~  B[x@n := C]
 -}
-subst :: Text -> Int -> Expr -> Expr -> Expr
+subst :: Text -> Int -> Expr X -> Expr X -> Expr X
 subst x n e' e = case e of
     Lam x' _A  b  -> Lam x' (subst x n e' _A)  b'
       where
@@ -464,11 +557,12 @@ subst x n e' e = case e of
     App f a       -> App (subst x n e' f) (subst x n e' a)
     Var (V x' n') -> if x == x' && n == n' then e' else e
     Const k       -> Const k
+    Import p      -> absurd p
 
 {-| @shift n x@ adds @n@ to the index of all free variables named @x@ within an
     `Expr`
 -}
-shift :: Int -> Text -> Expr -> Expr
+shift :: Int -> Text -> Expr X -> Expr X
 shift d x0 e0 = go e0 0
   where
     go e c = case e of
@@ -483,6 +577,7 @@ shift d x0 e0 = go e0 0
           where
             n' = if x == x0 && n >= c then n + d else n
         Const k       -> Const k
+        Import p      -> absurd p
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
@@ -491,7 +586,7 @@ shift d x0 e0 = go e0 0
     is not necessary for just type-checking.  If you actually care about the
     returned type then you may want to `normalize` it afterwards.
 -}
-typeWith :: Context -> Expr -> Either TypeError Expr
+typeWith :: Context -> Expr X -> Either TypeError (Expr X)
 typeWith ctx e = case e of
     Const c     -> fmap Const (axiom c)
     Var x       -> case lookupCtx x ctx of
@@ -529,16 +624,17 @@ typeWith ctx e = case e of
                 let nf_A  = normalize _A
                     nf_A' = normalize _A'
                 Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
+    Import p    -> absurd p
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
     will fail.
 -}
-typeOf :: Expr -> Either TypeError Expr
+typeOf :: Expr X -> Either TypeError (Expr X)
 typeOf = typeWith []
 
 -- | Reduce an expression to weak-head normal form
-whnf :: Expr -> Expr
+whnf :: Expr X -> Expr X
 whnf e = case e of
     App f a -> case whnf f of
         Lam x _A b -> whnf (shift (-1) x b')  -- Beta reduce
@@ -549,7 +645,7 @@ whnf e = case e of
     _       -> e
 
 -- | Returns whether a variable is free in an expression
-freeIn :: Var -> Expr -> Bool
+freeIn :: Var -> Expr X -> Bool
 freeIn v@(V x n) = go
   where
     go e = case e of
@@ -564,6 +660,7 @@ freeIn v@(V x n) = go
         Var v'      -> v == v'
         App f a     -> go f || go a
         Const _     -> False
+        Import p    -> absurd p
 
 {-| Reduce an expression to its normal form, performing both beta reduction and
     eta reduction
@@ -572,7 +669,7 @@ freeIn v@(V x n) = go
     expressions before normalizing them since normalization can convert an
     ill-typed expression into a well-typed expression.
 -}
-normalize :: Expr -> Expr
+normalize :: Expr X -> Expr X
 normalize e = case e of
     Lam x _A b -> case b' of
         App f a -> case a of
@@ -596,12 +693,13 @@ normalize e = case e of
         f'         -> App f' (normalize a)
     Var   _    -> e
     Const _    -> e
+    Import p   -> absurd p
 
 {-| Pretty-print an expression
 
     The result is a syntactically valid Morte program
 -}
-prettyExpr :: Expr -> Text
+prettyExpr :: Expr X -> Text
 prettyExpr = toLazyText . buildExpr
 
 -- | Pretty-print a type error

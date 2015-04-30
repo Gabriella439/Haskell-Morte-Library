@@ -17,19 +17,24 @@ module Morte.Parser (
 import Control.Exception (Exception)
 import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
 import Control.Monad.Trans.State.Strict (State, runState)
+import Data.ByteString (ByteString)
+import Data.ByteString.Lazy (toStrict)
 import Data.Functor.Identity (Identity, runIdentity)
 import Data.Monoid (mempty, (<>))
 import Data.Text.Lazy (Text, unpack)
+import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
+import Filesystem.Path.CurrentOS (FilePath, fromText)
 import Lens.Family.Stock (_1, _2)
 import Lens.Family.State.Strict ((.=), use, zoom)
-import Morte.Core (Var(..), Const(..), Expr(..))
+import Morte.Core (Var(..), Const(..), Path(..), URL(..), Expr(..))
 import qualified Morte.Lexer as Lexer
 import Morte.Lexer (Token, Position)
 import Pipes (Producer, hoist, lift, next)
+import Prelude hiding (FilePath)
 
 }
 
@@ -43,36 +48,46 @@ import Pipes (Producer, hoist, lift, next)
     '('    { Lexer.OpenParen  }
     ')'    { Lexer.CloseParen }
     ':'    { Lexer.Colon      }
-    '@'    { Lexer.At         }
     '*'    { Lexer.Star       }
     'BOX'  { Lexer.Box        }
     '->'   { Lexer.Arrow      }
     '\\'   { Lexer.Lambda     }
     '|~|'  { Lexer.Pi         }
     label  { Lexer.Label $$   }
-    number { Lexer.Number $$  }
+    at     { Lexer.At $$      }
+    host   { Lexer.Host $$    }
+    port   { Lexer.Port $$    }
+    path   { Lexer.Path $$    }
+    file   { Lexer.File $$    }
 
 %%
 
-Expr :: { Expr }
-     : BExpr                                   { $1           }
-     | '\\'  '(' label ':' Expr ')' '->' Expr  { Lam $3 $5 $8 }
-     | '|~|' '(' label ':' Expr ')' '->' Expr  { Pi  $3 $5 $8 }
-     | BExpr '->' Expr                         { Pi "_" $1 $3 }
+Expr :: { Expr Path }
+    : BExpr                                   { $1           }
+    | '\\'  '(' label ':' Expr ')' '->' Expr  { Lam $3 $5 $8 }
+    | '|~|' '(' label ':' Expr ')' '->' Expr  { Pi  $3 $5 $8 }
+    | BExpr '->' Expr                         { Pi "_" $1 $3 }
 
 VExpr :: { Var }
-      : label '@' number                       { V $1 $3      }
-      | label                                  { V $1 0       }
+    : label at                                { V $1 $2      }
+    | label                                   { V $1 0       }
 
-BExpr :: { Expr }
-      :  BExpr AExpr                            { App $1 $2    }
-      | AExpr                                  { $1           }
+BExpr :: { Expr Path }
+    : BExpr AExpr                             { App $1 $2    }
+    | AExpr                                   { $1           }
 
-AExpr :: { Expr }
-      : VExpr                                  { Var $1       }
-      | '*'                                    { Const Star   }
-      | 'BOX'                                  { Const Box    }
-      | '(' Expr ')'                           { $2           }
+AExpr :: { Expr Path }
+    : VExpr                                   { Var $1       }
+    | '*'                                     { Const Star   }
+    | 'BOX'                                   { Const Box    }
+    | Import                                  { Import $1    }
+    | '(' Expr ')'                            { $2           }
+
+Import :: { Path }
+    : file           { IsFile $1                       }
+    | host port path { IsURL (URL $1          $2   $3) }
+    | host      path { IsURL (URL $1          1999 $2) }
+    |           path { IsURL (URL "localhost" 1999 $1) }
 
 {
 -- | The specific parsing error
@@ -115,7 +130,7 @@ parseError :: Token -> Lex a
 parseError token = throwError (Parsing token)
 
 -- | Parse an `Expr` from `Text` or return a `ParseError` if parsing fails
-exprFromText :: Text -> Either ParseError Expr
+exprFromText :: Text -> Either ParseError (Expr Path)
 exprFromText text = case runState (runErrorT parseExpr) initialStatus of
     (x, (position, _)) -> case x of
         Left  e    -> Left (ParseError position e)

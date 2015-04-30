@@ -13,12 +13,17 @@ module Morte.Lexer (
 
 import Control.Monad.Trans.State.Strict (State)
 import Data.Bits (shiftR, (.&.))
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as Lazy
 import Data.Char (ord, digitToInt)
 import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
+import Filesystem.Path.CurrentOS (FilePath, fromText)
 import Lens.Family.State.Strict ((.=), (+=))
 import Pipes (Producer, lift, yield)
+import Prelude hiding (FilePath)
 
 }
 
@@ -27,8 +32,10 @@ $digit = 0-9
 -- Same as Haskell
 $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 
-$fst       = [A-Za-z_]
-$labelchar = [A-Za-z0-9_]
+$fst        = [A-Za-z_]
+$labelchar  = [A-Za-z0-9_]
+$domainchar = [A-Za-z0-9\.]
+$pathchar   = [A-Za-z0-9\.\/]
 
 $whiteNoNewline = $white # \n
 
@@ -37,23 +44,41 @@ tokens :-
     $whiteNoNewline+                    ;
     \n                                  { \_    -> lift (do
                                             line   += 1
-                                            column .= 0 )                      }
+                                            column .= 0 )                     }
     "--".*                              ;
-    "("                                 { \_    -> yield OpenParen             }
-    ")"                                 { \_    -> yield CloseParen            }
-    ":"                                 { \_    -> yield Colon                 }
-    "@"                                 { \_    -> yield At                    }
-    "*"                                 { \_    -> yield Star                  }
-    "BOX" | "□"                         { \_    -> yield Box                   }
-    "->" | "→"                          { \_    -> yield Arrow                 }
-    "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                    }
-    "\" | "λ"                           { \_    -> yield Lambda                }
-    $digit+                             { \text -> yield (Number (toInt text)) }
-    $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)          }
+    "("                                 { \_    -> yield OpenParen            }
+    ")"                                 { \_    -> yield CloseParen           }
+    ":"                                 { \_    -> yield Colon                }
+    "*"                                 { \_    -> yield Star                 }
+    "BOX" | "□"                         { \_    -> yield Box                  }
+    "->" | "→"                          { \_    -> yield Arrow                }
+    "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                   }
+    "\" | "λ"                           { \_    -> yield Lambda               }
+    $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)         }
+    "#" $pathchar+                      { \text -> yield (File (toFile text)) }
+    "@" $digit+                         { \text -> yield (At (toAt text))     }
+    "@" $domainchar+                    { \text -> yield (Host (toHost text)) }
+    ":" $digit+                         { \text -> yield (Port (toPort text)) }
+    "/" $pathchar+                      { \text -> yield (Path (toPath text)) }
 
 {
 toInt :: Text -> Int
 toInt = Text.foldl' (\x c -> 10 * x + digitToInt c) 0
+
+toAt :: Text -> Int
+toAt = toInt . Text.drop 1
+
+toPort :: Text -> Int
+toPort = toInt . Text.drop 1
+
+toHost :: Text -> ByteString
+toHost = Lazy.toStrict . encodeUtf8 . Text.drop 1
+
+toPath :: Text -> ByteString
+toPath = Lazy.toStrict . encodeUtf8 . Text.drop 1
+
+toFile :: Text -> FilePath
+toFile = fromText . Text.toStrict . Text.drop 1
 
 -- This was lifted almost intact from the @alex@ source code
 encode :: Char -> (Word8, [Word8])
@@ -139,14 +164,17 @@ data Token
     = OpenParen
     | CloseParen
     | Colon
-    | At
+    | At Int
     | Star
     | Box
     | Arrow
     | Lambda
     | Pi
     | Label Text
-    | Number Int
+    | Host ByteString
+    | Port Int
+    | Path ByteString
+    | File FilePath
     | EOF
     deriving (Show)
 }

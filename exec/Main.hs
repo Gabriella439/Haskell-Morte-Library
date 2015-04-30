@@ -4,9 +4,11 @@ import Data.Monoid (mempty)
 import qualified Data.Text.Lazy.IO as Text
 import Morte.Core (typeOf, prettyTypeError, prettyExpr, normalize)
 import Morte.Parser (exprFromText, prettyParseError)
-import Options.Applicative
+import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
+
+import Morte.Import (load)
 
 main :: IO ()
 main = do
@@ -23,11 +25,13 @@ main = do
         Left  pe   -> do
             Text.hPutStr stderr (prettyParseError pe)
             exitFailure
-        Right expr -> case typeOf expr of
-            Left  te       -> do
-                Text.hPutStr stderr (prettyTypeError te)
-                exitFailure
-            Right typeExpr -> do
-                Text.hPutStrLn stderr (prettyExpr (normalize typeExpr))
-                Text.hPutStrLn stderr mempty
-                Text.putStrLn (prettyExpr (normalize expr))
+        Right expr -> do
+            expr' <- load expr
+            case typeOf expr' of
+                Left  te       -> do
+                    Text.hPutStr stderr (prettyTypeError te)
+                    exitFailure
+                Right typeExpr -> do
+                    Text.hPutStrLn stderr (prettyExpr (normalize typeExpr))
+                    Text.hPutStrLn stderr mempty
+                    Text.putStrLn (prettyExpr (normalize expr'))
