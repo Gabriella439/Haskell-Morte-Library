@@ -48,50 +48,46 @@ import Prelude hiding (FilePath)
     '('    { Lexer.OpenParen  }
     ')'    { Lexer.CloseParen }
     ':'    { Lexer.Colon      }
-    '@'    { Lexer.At         }
-    '#'    { Lexer.Hash       }
     '*'    { Lexer.Star       }
     'BOX'  { Lexer.Box        }
     '->'   { Lexer.Arrow      }
     '\\'   { Lexer.Lambda     }
     '|~|'  { Lexer.Pi         }
     label  { Lexer.Label $$   }
-    number { Lexer.Number $$  }
+    at     { Lexer.At $$      }
+    host   { Lexer.Host $$    }
+    port   { Lexer.Port $$    }
+    path   { Lexer.Path $$    }
+    file   { Lexer.File $$    }
 
 %%
 
 Expr :: { Expr Path }
-     : BExpr                                   { $1           }
-     | '\\'  '(' label ':' Expr ')' '->' Expr  { Lam $3 $5 $8 }
-     | '|~|' '(' label ':' Expr ')' '->' Expr  { Pi  $3 $5 $8 }
-     | BExpr '->' Expr                         { Pi "_" $1 $3 }
+    : BExpr                                   { $1           }
+    | '\\'  '(' label ':' Expr ')' '->' Expr  { Lam $3 $5 $8 }
+    | '|~|' '(' label ':' Expr ')' '->' Expr  { Pi  $3 $5 $8 }
+    | BExpr '->' Expr                         { Pi "_" $1 $3 }
 
 VExpr :: { Var }
-      : label '@' number                       { V $1 $3      }
-      | label                                  { V $1 0       }
+    : label at                                { V $1 $2      }
+    | label                                   { V $1 0       }
 
 BExpr :: { Expr Path }
-      : BExpr AExpr                            { App $1 $2    }
-      | AExpr                                  { $1           }
+    : BExpr AExpr                             { App $1 $2    }
+    | AExpr                                   { $1           }
 
 AExpr :: { Expr Path }
-      : VExpr                                  { Var $1       }
-      | '*'                                    { Const Star   }
-      | 'BOX'                                  { Const Box    }
-      | Import                                 { Import $1    }
-      | '(' Expr ')'                           { $2           }
+    : VExpr                                   { Var $1       }
+    | '*'                                     { Const Star   }
+    | 'BOX'                                   { Const Box    }
+    | Import                                  { Import $1    }
+    | '(' Expr ')'                            { $2           }
 
 Import :: { Path }
-       :                      '#' File  { IsFile $2                       }
-       | '@' Bytes ':' number '#' Bytes { IsURL (URL $2          $4   $6) }
-       | '@' Bytes            '#' Bytes { IsURL (URL $2          1999 $4) }
-       | '@'                      Bytes { IsURL (URL "localhost" 1999 $2) }
-
-Bytes :: { ByteString }
-      : label                           { toStrict (encodeUtf8 $1)    }
-
-File :: { FilePath }
-     : label                            { fromText (Text.toStrict $1) }
+    : file           { IsFile $1                       }
+    | host port path { IsURL (URL $1          $2   $3) }
+    | host      path { IsURL (URL $1          1999 $2) }
+    |           path { IsURL (URL "localhost" 1999 $1) }
 
 {
 -- | The specific parsing error
