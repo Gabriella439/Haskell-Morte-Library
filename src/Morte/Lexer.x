@@ -57,7 +57,9 @@ tokens :-
     $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)         }
     "#" $pathchar+                      { \text -> yield (File (toFile text)) }
     "@" $digit+                         { \text -> yield (At (toAt text))     }
-    "@" $domainchar+                    { \text -> yield (Host (toHost text)) }
+    "@https://" $domainchar+            { \text -> yield (Host (https  text)) }
+    "@http://" $domainchar+             { \text -> yield (Host (http   text)) }
+    "@" $domainchar+                    { \text -> yield (Host (host   text)) }
     ":" $digit+                         { \text -> yield (Port (toPort text)) }
     "/" $pathchar+                      { \text -> yield (Path (toPath text)) }
 
@@ -71,8 +73,14 @@ toAt = toInt . Text.drop 1
 toPort :: Text -> Int
 toPort = toInt . Text.drop 1
 
-toHost :: Text -> ByteString
-toHost = Lazy.toStrict . encodeUtf8 . Text.drop 1
+host :: Text -> ByteString
+host = Lazy.toStrict . encodeUtf8 . Text.drop 1
+
+http :: Text -> ByteString
+http = Lazy.toStrict . encodeUtf8 . Text.drop 8
+
+https :: Text -> ByteString
+https = Lazy.toStrict . encodeUtf8 . Text.drop 9
 
 toPath :: Text -> ByteString
 toPath = Lazy.toStrict . encodeUtf8 . Text.drop 1
