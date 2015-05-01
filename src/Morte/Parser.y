@@ -84,10 +84,10 @@ AExpr :: { Expr Path }
     | '(' Expr ')'                            { $2           }
 
 Import :: { Path }
-    : file           { IsFile $1                       }
-    | host port path { IsURL (URL $1          $2   $3) }
-    | host      path { IsURL (URL $1          1999 $2) }
-    |           path { IsURL (URL "localhost" 1999 $1) }
+    : file           { IsFile $1                     }
+    | host port path { IsURL (URL $1          $2 $3) }
+    | host      path { IsURL (URL $1          80 $2) }
+    |           path { IsURL (URL "localhost" 80 $1) }
 
 {
 -- | The specific parsing error

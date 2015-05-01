@@ -47,12 +47,12 @@
     > @host:port/path
 
     For example, if our @id@ expression were hosted at
-    @https://example.com:1999/id@, then we would use:
+    @http://example.com:80/id@, then we would use:
 
-    > -- Note: no 'https://'
-    > @example.com:1999/id
+    > -- Note: no 'http://'
+    > @example.com:80/id
 
-    If you omit the port, Morte will default to the standard Morte port of 1999:
+    If you omit the port, Morte will default to port 80:
 
     > -- Same thing
     > @example.com/id
@@ -142,7 +142,9 @@ needManager = Load (do
     case x of
         Just m  -> return m
         Nothing -> do
-            m <- lift (managed (HTTP.withManager HTTP.tlsManagerSettings))
+            let settings = HTTP.tlsManagerSettings
+                    { HTTP.managerResponseTimeout = Just 1000000 }  -- 1 second
+            m <- lift (managed (HTTP.withManager settings))
             zoom manager (put (Just m))
             return m )
 
