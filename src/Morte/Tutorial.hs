@@ -63,6 +63,9 @@ module Morte.Tutorial (
     -- * Effects
     -- $effects
 
+    -- * Imports
+    -- $imports
+
     -- * Portability
     -- $portability
 
@@ -1998,6 +2001,111 @@ input to standard output:
 
     Any manipulations of this corecursive syntax tree within Morte will compile
     to efficient state transitions.
+-}
+
+{- $imports
+    In Morte, expressions are the unit of code distribution.  For example,
+    suppose that you wanted to distribute the @Nat@ type with its two
+    constructors: @Succ@ and @Nat@.  You could use Boehm-Berarducci encoding to
+    separately encode each term and type as its own independent lambda
+    expression and save each of them in their own file:
+
+> $ cat Nat
+>     forall (Nat : *)
+> ->  forall (Succ : Nat -> Nat)
+> ->  forall (Zero : Nat)
+> ->  Nat
+
+> $ cat Zero
+>     \(Nat : *)
+> ->  \(Succ : Nat -> Nat)
+> ->  \(Zero : Nat)
+> ->  Zero
+
+> $ cat Succ
+>     \(   n
+>     :   forall (Nat : *)
+>     ->  forall (Succ : Nat -> Nat)
+>     ->  forall (Zero : Nat)
+>     -> Nat
+>     )
+> ->  \(Nat : *)
+> ->  \(Succ : Nat -> Nat)
+> ->  \(Zero : Nat)
+> ->  Succ (n Nat Succ Zero)
+
+    You can then import any of these expressions by prepending their file name
+    with a hash tag.  For example:
+
+> $ morte
+> #Succ (#Succ (#Succ #Zero))
+> <Ctrl-D>
+> ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
+>
+> λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ Zero))
+
+    The way this works is that each hashtag is replaced with the expression
+    from that file, so it would be as if you wrote the following really long
+    expression:
+
+> $ morte
+> -- #Succ
+> (   \(   n
+>     :   forall (Nat : *)
+>     ->  forall (Succ : Nat -> Nat)
+>     ->  forall (Zero : Nat)
+>     -> Nat
+>     )
+> ->  \(Nat : *)
+> ->  \(Succ : Nat -> Nat)
+> ->  \(Zero : Nat)
+> ->  Succ (n Nat Succ Zero)
+> )
+> (   -- #Succ
+>     (   \(   n
+>         :   forall (Nat : *)
+>         ->  forall (Succ : Nat -> Nat)
+>         ->  forall (Zero : Nat)
+>         -> Nat
+>         )
+>     ->  \(Nat : *)
+>     ->  \(Succ : Nat -> Nat)
+>     ->  \(Zero : Nat)
+>     ->  Succ (n Nat Succ Zero)
+>     )
+>     (   -- #Succ
+>         (   \(   n
+>             :   forall (Nat : *)
+>             ->  forall (Succ : Nat -> Nat)
+>             ->  forall (Zero : Nat)
+>             -> Nat
+>             )
+>         ->  \(Nat : *)
+>         ->  \(Succ : Nat -> Nat)
+>         ->  \(Zero : Nat)
+>         ->  Succ (n Nat Succ Zero)
+>         )
+>         -- #Zero
+>         (   \(Nat : *)
+>         ->  \(Succ : Nat -> Nat)
+>         ->  \(Zero : Nat)
+>         ->  Zero
+>         )
+>     )
+> )
+> <Ctrl-D>
+> ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
+>
+> λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ Zero))
+
+    With Boehm-Beraducci encoding, the implementations of @Succ@, @Zero@, and
+    @Nat@ work out in such a way that when you import them they behave just like
+    the constructors they are supposed to represent.  This was an intentional
+    design feature of Boehm-Berarducci encoding known as \"representability\".
+
+    You can also import expressions hosted on network endpoints.  See the
+    documentation in the "Morte.Import" module for more details about the syntax
+    for network imports.
 -}
 
 {- $portability
