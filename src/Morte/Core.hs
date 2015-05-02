@@ -73,6 +73,7 @@ module Morte.Core (
     buildExpr,
     buildTypeMessage,
     buildTypeError,
+    buildPath,
     ) where
 
 import Control.Applicative (Applicative(pure, (<*>)), (<$>))
@@ -93,10 +94,12 @@ import Data.Text.Lazy (Text, unpack)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text
 import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
+import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
+import qualified Filesystem.Path.CurrentOS as Filesystem
 import Prelude hiding (FilePath)
 
 {-| Label for a bound variable
@@ -539,6 +542,14 @@ buildTypeError (TypeError ctx expr msg)
     buildContext =
         (fromLazyText . Text.unlines . map (toLazyText . buildKV) . reverse) ctx
 
+buildPath :: Path -> Builder
+buildPath (IsFile file) = "#" <> Builder.fromText (toText' file)
+  where
+    toText' = either id id . Filesystem.toText
+buildPath (IsURL (URL host port path)) =
+        "@" <> Builder.fromText (Text.decodeUtf8 host)
+    <>  ":" <> decimal port
+    <>  "/" <> Builder.fromText (Text.decodeUtf8 path)
 
 {-| Substitute all occurrences of a variable with an expression
 
