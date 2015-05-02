@@ -92,7 +92,7 @@ import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
 import Prelude hiding (FilePath)
 
-import Morte.Core (Expr, Path(..), URL(..), X(..), buildPath)
+import Morte.Core (Expr, Path(..), URL(..), X(..), buildPath, typeOf)
 import Morte.Parser (exprFromText)
 
 -- | An import failed because of a cycle import
@@ -176,7 +176,8 @@ loadDynamic p = do
 loadStatic :: Path -> StateT Status Managed (Expr X)
 loadStatic path = do
     paths <- zoom stack get
-    zoom stack (put $! paths ++ [path])
+    let paths' = paths ++ [path]
+    zoom stack (put $! paths')
     expr <- if path `elem` paths
         then liftIO (throwIO (Imported paths (Cycle path)))
         else do
@@ -189,9 +190,10 @@ loadStatic path = do
                         Just expr -> do
                             zoom cache (put $! Map.insert path expr m)
                             return expr
-                        Nothing   -> do
-                            expr <- fmap join (traverse loadStatic expr')
-                            return expr
+                        Nothing   -> fmap join (traverse loadStatic expr')
+    case typeOf expr of
+        Left  err -> liftIO (throwIO (Imported paths' err))
+        Right _   -> return ()
     zoom stack (put paths)
     return expr
 
