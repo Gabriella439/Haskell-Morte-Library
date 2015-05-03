@@ -17,24 +17,19 @@ module Morte.Parser (
 import Control.Exception (Exception)
 import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
 import Control.Monad.Trans.State.Strict (State, runState)
-import Data.ByteString (ByteString)
-import Data.ByteString.Lazy (toStrict)
 import Data.Functor.Identity (Identity, runIdentity)
 import Data.Monoid (mempty, (<>))
-import Data.Text.Lazy (Text, unpack)
-import Data.Text.Lazy.Encoding (encodeUtf8)
+import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Typeable (Typeable)
-import Filesystem.Path.CurrentOS (FilePath, fromText)
 import Lens.Family.Stock (_1, _2)
 import Lens.Family.State.Strict ((.=), use, zoom)
 import Morte.Core (Var(..), Const(..), Path(..), Expr(..))
 import qualified Morte.Lexer as Lexer
 import Morte.Lexer (Token, Position)
 import Pipes (Producer, hoist, lift, next)
-import Prelude hiding (FilePath)
 
 }
 
@@ -142,7 +137,7 @@ data ParseError = ParseError
     } deriving (Typeable)
 
 instance Show ParseError where
-    show = unpack . prettyParseError
+    show = Text.unpack . prettyParseError
 
 instance Exception ParseError
 

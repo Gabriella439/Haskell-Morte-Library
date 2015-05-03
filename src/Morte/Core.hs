@@ -87,13 +87,12 @@ import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
 import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
-import Data.Text ()  -- For the `IsString` instance
 import Data.Text.Lazy (Text, unpack)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text
-import Data.Text.Lazy.Builder (Builder, toLazyText, fromLazyText)
+import Data.Text.Lazy.Builder (Builder)
 import qualified Data.Text.Lazy.Builder as Builder
-import Data.Text.Lazy.Builder.Int (decimal)
+import Data.Text.Lazy.Builder.Int as Builder
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
@@ -431,7 +430,8 @@ buildConst c = case c of
 -- | Render a pretty-printed `Var` as a `Builder`
 buildVar :: Var -> Builder
 buildVar (V txt n) =
-    fromLazyText txt <> if n == 0 then mempty else "@" <> decimal n
+        Builder.fromLazyText txt
+    <>  if n == 0 then mempty else ("@" <>  Builder.decimal n)
 
 -- | Render a pretty-printed `Expr` as a `Builder`
 buildExpr :: Expr X -> Builder
@@ -444,7 +444,7 @@ buildExpr = go False False
         Lam x _A b ->
                 (if parenBind then "(" else "")
             <>  "λ("
-            <>  fromLazyText x
+            <>  Builder.fromLazyText x
             <>  " : "
             <>  go False False _A
             <>  ") → "
@@ -453,8 +453,11 @@ buildExpr = go False False
         Pi  x _A b ->
                 (if parenBind then "(" else "")
             <>  (if x /= "_"
-                 then
-                     "∀(" <> fromLazyText x <> " : " <> go False False _A <> ")"
+                 then    "∀("
+                     <>  Builder.fromLazyText x
+                     <>  " : "
+                     <>  go False False _A
+                     <>  ")"
                  else go True False _A )
             <>  " → "
             <>  go False False b
@@ -523,18 +526,21 @@ buildTypeMessage msg = case msg of
 buildTypeError :: TypeError -> Builder
 buildTypeError (TypeError ctx expr msg)
     =   "\n"
-    <>  (    if Text.null (toLazyText buildContext )
+    <>  (    if Text.null (Builder.toLazyText (buildContext ctx))
              then mempty
-             else "Context:\n" <> buildContext <> "\n"
+             else "Context:\n" <> buildContext ctx <> "\n"
         )
     <>  "Expression: " <> buildExpr expr <> "\n"
     <>  "\n"
     <>  buildTypeMessage msg
   where
-    buildKV (key, val) = fromLazyText key <> " : " <> buildExpr val
+    buildKV (key, val) = Builder.fromLazyText key <> " : " <> buildExpr val
 
     buildContext =
-        (fromLazyText . Text.unlines . map (toLazyText . buildKV) . reverse) ctx
+            Builder.fromLazyText
+        .   Text.unlines
+        .   map (Builder.toLazyText . buildKV)
+        .   reverse
 
 buildPath :: Path -> Builder
 buildPath (File file) = "#" <> Builder.fromText (toText' file)
@@ -702,8 +708,8 @@ normalize e = case e of
     The result is a syntactically valid Morte program
 -}
 prettyExpr :: Expr X -> Text
-prettyExpr = toLazyText . buildExpr
+prettyExpr = Builder.toLazyText . buildExpr
 
 -- | Pretty-print a type error
 prettyTypeError :: TypeError -> Text
-prettyTypeError = toLazyText . buildTypeError
+prettyTypeError = Builder.toLazyText . buildTypeError

@@ -13,13 +13,12 @@ module Morte.Lexer (
 
 import Control.Monad.Trans.State.Strict (State)
 import Data.Bits (shiftR, (.&.))
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as Lazy
-import Data.Char (ord, digitToInt)
+import Data.Char (digitToInt)
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
-import Filesystem.Path.CurrentOS (FilePath, fromText)
+import Filesystem.Path.CurrentOS (FilePath)
+import qualified Filesystem.Path.CurrentOS as Filesystem
 import Lens.Family.State.Strict ((.=), (+=))
 import Pipes (Producer, lift, yield)
 import Prelude hiding (FilePath)
@@ -67,7 +66,7 @@ toUrl :: Text -> String
 toUrl = Text.unpack . Text.drop 1
 
 toFile :: Text -> FilePath
-toFile = fromText . Text.toStrict . Text.drop 1
+toFile = Filesystem.fromText . Text.toStrict . Text.drop 1
 
 -- This was lifted almost intact from the @alex@ source code
 encode :: Char -> (Word8, [Word8])
