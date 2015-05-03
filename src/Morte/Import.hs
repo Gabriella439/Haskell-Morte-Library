@@ -68,7 +68,7 @@ module Morte.Import (
     , Imported(..)
     ) where
 
-import Control.Exception (Exception, throwIO)
+import Control.Exception (Exception, IOException, SomeException, catch, throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Managed (Managed, managed, with)
@@ -76,12 +76,14 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Encoding as Text
 import Data.Text.Lazy.Builder (Builder)
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
+import Filesystem.Path ((</>))
 import Filesystem as Filesystem
 import Lens.Family (LensLike')
 import Lens.Family.State.Strict (zoom)
@@ -189,11 +191,34 @@ loadDynamic :: Path -> StateT Status Managed (Expr Path)
 loadDynamic p = do
     txt <- case p of
         File file -> do
-            liftIO (fmap Text.fromStrict (Filesystem.readTextFile file))
+            let readFile' = do
+                    Filesystem.readTextFile file `catch` (\e -> do
+                    -- Unfortunately, GHC throws an `InappropriateType`
+                    -- exception when trying to read a directory, but does not
+                    -- export the exception, so I must resort to a more
+                    -- heavy-handed `catch`
+                    let _ = e :: IOException
+                    Filesystem.readTextFile (file </> "@") `catch` (\e' -> do
+                    -- If the fallback fails, reuse the original exception to
+                    -- avoid user confusion
+                    let _ = e' :: SomeException
+                    throwIO e ) )
+            liftIO (fmap Text.fromStrict readFile')
         URL  url  -> do
             request  <- liftIO (HTTP.parseUrl url)
             m        <- needManager
-            response <- liftIO (HTTP.httpLbs request m)
+            let httpLbs' = do
+                    HTTP.httpLbs request m `catch` (\e -> case e of
+                        HTTP.StatusCodeException _ _ _ -> do
+                            let request' = request
+                                    { HTTP.path = HTTP.path request <> "/@" }
+                            HTTP.httpLbs request' m `catch` (\e' -> do
+                            -- If the fallback fails, reuse the original
+                            -- exception to avoid user confusion
+                            let _ = e' :: SomeException
+                            throwIO e )
+                        _ -> throwIO e )
+            response <- liftIO httpLbs'
             case Text.decodeUtf8' (HTTP.responseBody response) of
                 Left  err -> liftIO (throwIO err)
                 Right txt -> return txt
