@@ -68,7 +68,7 @@ module Morte.Import (
     , Imported(..)
     ) where
 
-import Control.Exception (Exception, IOException, SomeException, catch, throwIO)
+import Control.Exception (Exception, IOException, catch, onException, throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Managed (Managed, managed, with)
@@ -189,6 +189,7 @@ needManager = do
 -- | Load a `Path` as a \"dynamic\" expression (without resolving any imports)
 loadDynamic :: Path -> StateT Status Managed (Expr Path)
 loadDynamic p = do
+    paths <- zoom stack get
     txt <- case p of
         File file -> do
             let readFile' = do
@@ -198,11 +199,10 @@ loadDynamic p = do
                     -- export the exception, so I must resort to a more
                     -- heavy-handed `catch`
                     let _ = e :: IOException
-                    Filesystem.readTextFile (file </> "@") `catch` (\e' -> do
                     -- If the fallback fails, reuse the original exception to
                     -- avoid user confusion
-                    let _ = e' :: SomeException
-                    throwIO e ) )
+                    Filesystem.readTextFile (file </> "@")
+                        `onException` throwIO e )
             liftIO (fmap Text.fromStrict readFile')
         URL  url  -> do
             request  <- liftIO (HTTP.parseUrl url)
@@ -212,26 +212,40 @@ loadDynamic p = do
                         HTTP.StatusCodeException _ _ _ -> do
                             let request' = request
                                     { HTTP.path = HTTP.path request <> "/@" }
-                            HTTP.httpLbs request' m `catch` (\e' -> do
                             -- If the fallback fails, reuse the original
                             -- exception to avoid user confusion
-                            let _ = e' :: SomeException
-                            throwIO e )
+                            HTTP.httpLbs request' m `onException` throwIO e
                         _ -> throwIO e )
             response <- liftIO httpLbs'
             case Text.decodeUtf8' (HTTP.responseBody response) of
                 Left  err -> liftIO (throwIO err)
                 Right txt -> return txt
+
+    let abort err = liftIO (throwIO (Imported paths err))
     case exprFromText txt of
-        Left  err  -> do
-            paths <- zoom stack get
-            liftIO (throwIO (Imported paths err))
+        Left  err  -> case p of
+            URL url -> do
+                -- Also try the fallback in case of a parse error, since the
+                -- parse error might signify that this URL points to a directory
+                -- list
+                request  <- liftIO (HTTP.parseUrl url)
+                let request' = request { HTTP.path = HTTP.path request <> "/@" }
+                m        <- needManager
+                response <- liftIO
+                    (HTTP.httpLbs request' m `onException` abort err)
+                case Text.decodeUtf8' (HTTP.responseBody response) of
+                    Left  _    -> liftIO (abort err)
+                    Right txt' -> case exprFromText txt' of
+                        Left  _    -> liftIO (abort err)
+                        Right expr -> return expr
+            _      -> liftIO (abort err)
         Right expr -> return expr 
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
 loadStatic :: Path -> StateT Status Managed (Expr X)
 loadStatic path = do
     paths <- zoom stack get
+
     let local (URL url) = case HTTP.parseUrl url of
             Nothing      -> False
             Just request -> case HTTP.host request of
@@ -245,8 +259,9 @@ loadStatic path = do
             then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
             else return ()
         _       -> return ()
+
     let paths' = path:paths
-    zoom stack (put $! paths')
+    zoom stack (put paths')
     expr <- if path `elem` paths
         then liftIO (throwIO (Imported paths (Cycle path)))
         else do
@@ -264,6 +279,7 @@ loadStatic path = do
         Left  err -> liftIO (throwIO (Imported paths' err))
         Right _   -> return ()
     zoom stack (put paths)
+
     return expr
 
 -- | Resolve all imports within an expression
