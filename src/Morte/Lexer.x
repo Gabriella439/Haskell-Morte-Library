@@ -13,14 +13,12 @@ module Morte.Lexer (
 
 import Control.Monad.Trans.State.Strict (State)
 import Data.Bits (shiftR, (.&.))
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as Lazy
-import Data.Char (ord, digitToInt)
+import Data.Char (digitToInt)
 import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
-import Filesystem.Path.CurrentOS (FilePath, fromText)
+import Filesystem.Path.CurrentOS (FilePath)
+import qualified Filesystem.Path.CurrentOS as Filesystem
 import Lens.Family.State.Strict ((.=), (+=))
 import Pipes (Producer, lift, yield)
 import Prelude hiding (FilePath)
@@ -32,11 +30,10 @@ $digit = 0-9
 -- Same as Haskell
 $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 
-$fst        = [A-Za-z_]
-$labelchar  = [A-Za-z0-9_]
-$domainchar = [A-Za-z0-9\.]
-$pathchar   = [A-Za-z0-9\.\/]
+$fst       = [A-Za-z\_]
+$labelchar = [A-Za-z0-9\_]
 
+$nonwhite       = ~$white
 $whiteNoNewline = $white # \n
 
 tokens :-
@@ -44,41 +41,32 @@ tokens :-
     $whiteNoNewline+                    ;
     \n                                  { \_    -> lift (do
                                             line   += 1
-                                            column .= 0 )                     }
+                                            column .= 0 )                      }
     "--".*                              ;
-    "("                                 { \_    -> yield OpenParen            }
-    ")"                                 { \_    -> yield CloseParen           }
-    ":"                                 { \_    -> yield Colon                }
-    "*"                                 { \_    -> yield Star                 }
-    "BOX" | "□"                         { \_    -> yield Box                  }
-    "->" | "→"                          { \_    -> yield Arrow                }
-    "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                   }
-    "\" | "λ"                           { \_    -> yield Lambda               }
-    $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)         }
-    "#" $pathchar+                      { \text -> yield (File (toFile text)) }
-    "@" $digit+                         { \text -> yield (At (toAt text))     }
-    "@" $domainchar+                    { \text -> yield (Host (toHost text)) }
-    ":" $digit+                         { \text -> yield (Port (toPort text)) }
-    "/" $pathchar+                      { \text -> yield (Path (toPath text)) }
-
+    "("                                 { \_    -> yield OpenParen             }
+    ")"                                 { \_    -> yield CloseParen            }
+    ":"                                 { \_    -> yield Colon                 }
+    "*"                                 { \_    -> yield Star                  }
+    "@"                                 { \_    -> yield At                    }
+    "BOX" | "□"                         { \_    -> yield Box                   }
+    "->" | "→"                          { \_    -> yield Arrow                 }
+    "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                    }
+    "\" | "λ"                           { \_    -> yield Lambda                }
+    $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)          }
+    $digit+                             { \text -> yield (Number (toInt text)) }
+    "#https://" $nonwhite+              { \text -> yield (URL (toUrl text))    }
+    "#http://" $nonwhite+               { \text -> yield (URL (toUrl text))    }
+    "#" $nonwhite+                      { \text -> yield (File (toFile text))  }
 {
+
 toInt :: Text -> Int
 toInt = Text.foldl' (\x c -> 10 * x + digitToInt c) 0
 
-toAt :: Text -> Int
-toAt = toInt . Text.drop 1
-
-toPort :: Text -> Int
-toPort = toInt . Text.drop 1
-
-toHost :: Text -> ByteString
-toHost = Lazy.toStrict . encodeUtf8 . Text.drop 1
-
-toPath :: Text -> ByteString
-toPath = Lazy.toStrict . encodeUtf8 . Text.drop 1
+toUrl :: Text -> String
+toUrl = Text.unpack . Text.drop 1
 
 toFile :: Text -> FilePath
-toFile = fromText . Text.toStrict . Text.drop 1
+toFile = Filesystem.fromText . Text.toStrict . Text.drop 1
 
 -- This was lifted almost intact from the @alex@ source code
 encode :: Char -> (Word8, [Word8])
@@ -164,17 +152,16 @@ data Token
     = OpenParen
     | CloseParen
     | Colon
-    | At Int
+    | At
     | Star
     | Box
     | Arrow
     | Lambda
     | Pi
     | Label Text
-    | Host ByteString
-    | Port Int
-    | Path ByteString
+    | Number Int
     | File FilePath
+    | URL String
     | EOF
     deriving (Show)
 }
