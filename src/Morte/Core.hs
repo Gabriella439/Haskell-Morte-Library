@@ -57,7 +57,6 @@ module Morte.Core (
     normalize,
 
     -- * Utilities
-    used,
     shift,
     prettyExpr,
     prettyTypeError,
@@ -467,37 +466,6 @@ buildExpr = go False False
             <>  go True False f <> " " <> go True True a
             <>  (if parenApp then ")" else "")
         Import p   -> absurd p
-
-{-| Determine whether a `Pi`-bound variable should be displayed
-
-    Notice that if any variable within the body of a `Pi` shares the same name and
-    an equal or greater DeBruijn index we display the `Pi`-bound variable.  To
-    illustrate why we don't just check for equality, consider this type:
-
-    > forall (a : *) -> forall (a : *) -> a@1
-
-    The @a\@1@ refers to the outer @a@ (i.e. the left one), but if we hid the
-    inner @a@ (the right one), the type would make no sense:
-
-    > forall (a : *) -> * -> a@1
-
-    ... because the @a\@1@ would misleadingly appear to be an unbound variable.
--}
-used :: Text -> Expr X -> Bool
-used x e0 = go e0 0
-  where
-    go e n = case e of
-        Var (V x' n') | x == x' && n' >= n -> True
-                      | otherwise          -> False
-        Lam x'  _A  b             -> go _A n || (go  b $! n')
-          where
-            n' = if x == x' then n + 1 else n
-        Pi  x'  _A _B             -> go _A n || (go _B $! n')
-          where
-            n' = if x == x' then n + 1 else n
-        App f a                  -> go f n || go a n
-        Const _                  -> False
-        Import p                 -> absurd p
 
 -- | Render a pretty-printed `TypeMessage` as a `Builder`
 buildTypeMessage :: TypeMessage -> Builder
