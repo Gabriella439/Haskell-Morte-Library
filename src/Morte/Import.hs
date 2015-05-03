@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Morte lets you import external expressions located either in local files or
@@ -63,6 +64,7 @@ module Morte.Import (
     -- * Import
       load
     , Cycle(..)
+    , ReferentiallyOpaque(..)
     , Imported(..)
     ) where
 
@@ -105,9 +107,44 @@ instance Exception Cycle
 instance Show Cycle where
     show (Cycle path) = "Cyclic import: " ++ builderToString (buildPath path)
 
+{-| Morte tries to ensure that all expressions hosted on network endpoints are
+    weakly referentially transparent, meaning roughly that any two clients will
+    compile the exact same result given the same URL.
+
+    To be precise, a strong interpretaton of referential transparency means that
+    if you compiled a URL you could replace the expression hosted at that URL
+    with the compiled result.  Let's term this \"static linking\".  Morte (very
+    intentionally) does not satisfy this stronger interpretation of referential
+    transparency since \"statically linking\" an expression (i.e. permanently
+    resolving all imports) means that the expression will no longer update if
+    its dependencies change.
+
+    In general, either interpretation of referential transparency is not
+    enforceable in a networked context since one can easily violate referential
+    transparency with a custom DNS, but Morte can still try to guard against
+    common unintentional violations.  To do this, Morte enforces that a
+    non-local import may not reference a local import.
+
+    Local imports are defined as:
+
+    * A file
+    * A URL with a host of @localhost@ or @127.0.0.1@
+
+    All other imports are defined to be non-local
+-}
+newtype ReferentiallyOpaque = ReferentiallyOpaque
+    { opaqueImport :: Path  -- ^ The offending opaque import
+    } deriving (Typeable)
+
+instance Exception ReferentiallyOpaque
+
+instance Show ReferentiallyOpaque where
+    show (ReferentiallyOpaque path) =
+        "Referentially opaque import: " ++ builderToString (buildPath path)
+
 -- | Extend another exception with the current import stack
 data Imported e = Imported
-    { importStack :: [Path] -- ^ Imports resolved so far
+    { importStack :: [Path] -- ^ Imports resolved so far, in reverse order
     , nested      :: e      -- ^ The nested exception
     } deriving (Typeable)
 
@@ -116,8 +153,8 @@ instance Exception e => Exception (Imported e)
 instance Show e => Show (Imported e) where
     show (Imported paths e) =
             "\n"
-        ++  unlines
-                (map (\path -> "⤷ " ++ builderToString (buildPath path)) paths)
+        ++  unlines (map (\path -> "⤷ " ++ builderToString (buildPath path))
+                         (reverse paths) )
         ++  show e
 
 data Status = Status
@@ -170,7 +207,20 @@ loadDynamic p = do
 loadStatic :: Path -> StateT Status Managed (Expr X)
 loadStatic path = do
     paths <- zoom stack get
-    let paths' = paths ++ [path]
+    let local (URL url) = case HTTP.parseUrl url of
+            Nothing      -> False
+            Just request -> case HTTP.host request of
+                "127.0.0.1" -> True
+                "localhost" -> True
+                _           -> False
+        local (File _)  = True
+    case paths of
+        parent:_ ->
+            if local path && not (local parent)
+            then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
+            else return ()
+        _       -> return ()
+    let paths' = path:paths
     zoom stack (put $! paths')
     expr <- if path `elem` paths
         then liftIO (throwIO (Imported paths (Cycle path)))
