@@ -542,6 +542,7 @@ buildTypeError (TypeError ctx expr msg)
         .   map (Builder.toLazyText . buildKV)
         .   reverse
 
+-- | Render pretty-printed `Path` as a `Builder`
 buildPath :: Path -> Builder
 buildPath (File file) = "#" <> Builder.fromText (toText' file)
   where
