@@ -17,7 +17,6 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as Lazy
 import Data.Char (ord, digitToInt)
 import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath, fromText)
@@ -32,11 +31,10 @@ $digit = 0-9
 -- Same as Haskell
 $opchar = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~]
 
-$fst        = [A-Za-z_]
-$labelchar  = [A-Za-z0-9_]
-$domainchar = [A-Za-z0-9\.]
-$pathchar   = [A-Za-z0-9\_\-\.\/]
+$fst       = [A-Za-z\_]
+$labelchar = [A-Za-z0-9\_]
 
+$nonwhite       = ~$white
 $whiteNoNewline = $white # \n
 
 tokens :-
@@ -44,46 +42,29 @@ tokens :-
     $whiteNoNewline+                    ;
     \n                                  { \_    -> lift (do
                                             line   += 1
-                                            column .= 0 )                     }
+                                            column .= 0 )                      }
     "--".*                              ;
-    "("                                 { \_    -> yield OpenParen            }
-    ")"                                 { \_    -> yield CloseParen           }
-    ":"                                 { \_    -> yield Colon                }
-    "*"                                 { \_    -> yield Star                 }
-    "BOX" | "□"                         { \_    -> yield Box                  }
-    "->" | "→"                          { \_    -> yield Arrow                }
-    "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                   }
-    "\" | "λ"                           { \_    -> yield Lambda               }
-    $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)         }
-    "#" $pathchar+                      { \text -> yield (File (toFile text)) }
-    "@" $digit+                         { \text -> yield (At (toAt text))     }
-    "@https://" $domainchar+            { \text -> yield (Host (https  text)) }
-    "@http://" $domainchar+             { \text -> yield (Host (http   text)) }
-    "@" $domainchar+                    { \text -> yield (Host (host   text)) }
-    ":" $digit+                         { \text -> yield (Port (toPort text)) }
-    "/" $pathchar+                      { \text -> yield (Path (toPath text)) }
-
+    "("                                 { \_    -> yield OpenParen             }
+    ")"                                 { \_    -> yield CloseParen            }
+    ":"                                 { \_    -> yield Colon                 }
+    "*"                                 { \_    -> yield Star                  }
+    "@"                                 { \_    -> yield At                    }
+    "BOX" | "□"                         { \_    -> yield Box                   }
+    "->" | "→"                          { \_    -> yield Arrow                 }
+    "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                    }
+    "\" | "λ"                           { \_    -> yield Lambda                }
+    $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)          }
+    $digit+                             { \text -> yield (Number (toInt text)) }
+    "#https://" $nonwhite+              { \text -> yield (URL (toUrl text))    }
+    "#http://" $nonwhite+               { \text -> yield (URL (toUrl text))    }
+    "#" $nonwhite+                      { \text -> yield (File (toFile text))  }
 {
+
 toInt :: Text -> Int
 toInt = Text.foldl' (\x c -> 10 * x + digitToInt c) 0
 
-toAt :: Text -> Int
-toAt = toInt . Text.drop 1
-
-toPort :: Text -> Int
-toPort = toInt . Text.drop 1
-
-host :: Text -> ByteString
-host = Lazy.toStrict . encodeUtf8 . Text.drop 1
-
-http :: Text -> ByteString
-http = Lazy.toStrict . encodeUtf8 . Text.drop 8
-
-https :: Text -> ByteString
-https = Lazy.toStrict . encodeUtf8 . Text.drop 9
-
-toPath :: Text -> ByteString
-toPath = Lazy.toStrict . encodeUtf8 . Text.drop 1
+toUrl :: Text -> String
+toUrl = Text.unpack . Text.drop 1
 
 toFile :: Text -> FilePath
 toFile = fromText . Text.toStrict . Text.drop 1
@@ -172,17 +153,16 @@ data Token
     = OpenParen
     | CloseParen
     | Colon
-    | At Int
+    | At
     | Star
     | Box
     | Arrow
     | Lambda
     | Pi
     | Label Text
-    | Host ByteString
-    | Port Int
-    | Path ByteString
+    | Number Int
     | File FilePath
+    | URL String
     | EOF
     deriving (Show)
 }

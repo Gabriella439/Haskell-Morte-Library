@@ -39,28 +39,24 @@
 
     ... Morte would throw the following exception if you tried to import @foo@:
 
-    > morte: Imported {importStack = [IsFile (FilePath "bar"),IsFile (FilePath "foo")], nested = Cycle {cyclicImport = IsFile (FilePath "foo")}}
+    > morte: 
+    > ⤷ #foo
+    > ⤷ #bar
+    > Cyclic import: #foo
 
-    You can also import expressions hosted on network endpoints.  Just use this
-    syntax:
+    You can also import expressions hosted on network endpoints.  Just use a
+    hashtag followed by a URL:
 
-    > @host:port/path
+    > #http://host[:port]/path
 
-    For example, if our @id@ expression were hosted at
-    @http://example.com:80/id@, then we would use:
+    For example, if our @id@ expression were hosted at @http://example.com/id@,
+    then we would embed the expression within our code using:
 
-    > -- Note: no 'http://'
-    > @example.com:80/id
+    > #http://example.com/id
 
-    If you omit the port, Morte will default to port 80:
+    Or if the @id@ expression were hosted locally on port 8000, you would write:
 
-    > -- Same thing
-    > @example.com/id
-
-    Also, if you omit the host, Morte will default to @localhost@:
-
-    > -- Equivalent to: @localhost/id
-    > /id
+    > #http://localhost:8000/id
 -}
 
 module Morte.Import (
@@ -76,11 +72,11 @@ import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Managed (Managed, managed, with)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
-import Data.Default.Class (def)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Encoding as Text
+import Data.Text.Lazy.Builder (Builder)
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
@@ -92,8 +88,11 @@ import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
 import Prelude hiding (FilePath)
 
-import Morte.Core (Expr, Path(..), URL(..), X(..), buildPath, typeOf)
+import Morte.Core (Expr, Path(..), X(..), buildPath, typeOf)
 import Morte.Parser (exprFromText)
+
+builderToString :: Builder -> String
+builderToString = Text.unpack . Builder.toLazyText
 
 -- | An import failed because of a cycle import
 newtype Cycle = Cycle
@@ -104,7 +103,7 @@ newtype Cycle = Cycle
 instance Exception Cycle
 
 instance Show Cycle where
-    show (Cycle path) = "Cyclic import: " ++ show path
+    show (Cycle path) = "Cyclic import: " ++ builderToString (buildPath path)
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
@@ -117,10 +116,9 @@ instance Exception e => Exception (Imported e)
 instance Show e => Show (Imported e) where
     show (Imported paths e) =
             "\n"
-        ++  unlines (map (\path -> "⤷ " ++ toString (buildPath path)) paths)
+        ++  unlines
+                (map (\path -> "⤷ " ++ builderToString (buildPath path)) paths)
         ++  show e
-      where
-        toString = Text.unpack . Builder.toLazyText
 
 data Status = Status
     { _stack   :: [Path]
@@ -153,14 +151,10 @@ needManager = do
 loadDynamic :: Path -> StateT Status Managed (Expr Path)
 loadDynamic p = do
     txt <- case p of
-        IsFile file -> do
+        File file -> do
             liftIO (fmap Text.fromStrict (Filesystem.readTextFile file))
-        IsURL  url  -> do
-            let request = def
-                    { HTTP.host = urlHost url
-                    , HTTP.port = urlPort url
-                    , HTTP.path = urlPath url
-                    }
+        URL  url  -> do
+            request  <- liftIO (HTTP.parseUrl url)
             m        <- needManager
             response <- liftIO (HTTP.httpLbs request m)
             case Text.decodeUtf8' (HTTP.responseBody response) of

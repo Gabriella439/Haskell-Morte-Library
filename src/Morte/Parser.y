@@ -30,7 +30,7 @@ import Data.Typeable (Typeable)
 import Filesystem.Path.CurrentOS (FilePath, fromText)
 import Lens.Family.Stock (_1, _2)
 import Lens.Family.State.Strict ((.=), use, zoom)
-import Morte.Core (Var(..), Const(..), Path(..), URL(..), Expr(..))
+import Morte.Core (Var(..), Const(..), Path(..), Expr(..))
 import qualified Morte.Lexer as Lexer
 import Morte.Lexer (Token, Position)
 import Pipes (Producer, hoist, lift, next)
@@ -49,16 +49,15 @@ import Prelude hiding (FilePath)
     ')'    { Lexer.CloseParen }
     ':'    { Lexer.Colon      }
     '*'    { Lexer.Star       }
+    '@'    { Lexer.At         }
     'BOX'  { Lexer.Box        }
     '->'   { Lexer.Arrow      }
     '\\'   { Lexer.Lambda     }
     '|~|'  { Lexer.Pi         }
     label  { Lexer.Label $$   }
-    at     { Lexer.At $$      }
-    host   { Lexer.Host $$    }
-    port   { Lexer.Port $$    }
-    path   { Lexer.Path $$    }
+    number { Lexer.Number $$  }
     file   { Lexer.File $$    }
+    url    { Lexer.URL $$     }
 
 %%
 
@@ -69,7 +68,7 @@ Expr :: { Expr Path }
     | BExpr '->' Expr                         { Pi "_" $1 $3 }
 
 VExpr :: { Var }
-    : label at                                { V $1 $2      }
+    : label '@' number                        { V $1 $3      }
     | label                                   { V $1 0       }
 
 BExpr :: { Expr Path }
@@ -84,10 +83,8 @@ AExpr :: { Expr Path }
     | '(' Expr ')'                            { $2           }
 
 Import :: { Path }
-    : file           { IsFile $1                     }
-    | host port path { IsURL (URL $1          $2 $3) }
-    | host      path { IsURL (URL $1          80 $2) }
-    |           path { IsURL (URL "localhost" 80 $1) }
+    : file                                    { File $1      }
+    | url                                     { URL  $1      }
 
 {
 -- | The specific parsing error

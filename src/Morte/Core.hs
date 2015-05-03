@@ -47,7 +47,6 @@ module Morte.Core (
     Var(..),
     Const(..),
     Path(..),
-    URL(..),
     X(..),
     Expr(..),
     Context,
@@ -84,7 +83,6 @@ import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
-import Data.ByteString (ByteString)
 import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
 import Data.Monoid (mempty, (<>))
@@ -201,12 +199,8 @@ rule Box  Star = return Star
 
 -- | Path to an external resource
 data Path
-    = IsFile FilePath
-    | IsURL  URL
-    deriving (Eq, Ord, Show)
-
--- | Path to a network resource
-data URL = URL { urlHost :: ByteString, urlPort :: Int, urlPath :: ByteString }
+    = File FilePath
+    | URL  String
     deriving (Eq, Ord, Show)
 
 {-| Like `Data.Void.Void`, except with an `NFData` instance in order to avoid
@@ -543,13 +537,10 @@ buildTypeError (TypeError ctx expr msg)
         (fromLazyText . Text.unlines . map (toLazyText . buildKV) . reverse) ctx
 
 buildPath :: Path -> Builder
-buildPath (IsFile file) = "#" <> Builder.fromText (toText' file)
+buildPath (File file) = "#" <> Builder.fromText (toText' file)
   where
     toText' = either id id . Filesystem.toText
-buildPath (IsURL (URL host port path)) =
-        "@" <> Builder.fromText (Text.decodeUtf8 host)
-    <>  ":" <> decimal port
-    <>  "/" <> Builder.fromText (Text.decodeUtf8 path)
+buildPath (URL  str ) = "#" <> Builder.fromString str
 
 {-| Substitute all occurrences of a variable with an expression
 
