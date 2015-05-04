@@ -1,0 +1,1 @@
+λ(a : *) → λ(b : *) → λ(c : *) → λ(g : b → ∀(Maybe : *) → ∀(Just : ∀(_Just : c) → Maybe) → ∀(Nothing : Maybe) → Maybe) → λ(f : a → ∀(Maybe : *) → ∀(Just : ∀(_Just : b) → Maybe) → ∀(Nothing : Maybe) → Maybe) → λ(x : a) → f x (∀(Maybe : *) → ∀(Just : ∀(_Just : c) → Maybe) → ∀(Nothing : Maybe) → Maybe) g (λ(Maybe : *) → λ(Just : ∀(_Just : c) → Maybe) → λ(Nothing : Maybe) → Nothing)

@@ -1,0 +1,1 @@
+λ(a : *) → λ(xs : ∀(List : *) → ∀(Cons : ∀(head : a) → ∀(tail : List) → List) → ∀(Nil : List) → List) → xs (∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool) (λ(head : a) → λ(tail : ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool) → λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → False) (λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True)

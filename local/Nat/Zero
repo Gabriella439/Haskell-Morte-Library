@@ -1,0 +1,1 @@
+λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Zero

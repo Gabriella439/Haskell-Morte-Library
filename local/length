@@ -1,0 +1,1 @@
+λ(a : *) → λ(xs : ∀(List : *) → ∀(Cons : ∀(head : a) → ∀(tail : List) → List) → ∀(Nil : List) → List) → xs (∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat) (λ(head : a) → λ(pred : ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat) → λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (pred Nat Succ Zero)) (λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Zero)

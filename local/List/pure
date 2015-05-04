@@ -1,0 +1,1 @@
+λ(a : *) → λ(x : a) → λ(List : *) → λ(Cons : ∀(head : a) → ∀(tail : List) → List) → Cons x
