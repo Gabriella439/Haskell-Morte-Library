@@ -50,14 +50,13 @@
 
     > #http://host[:port]/path
 
+    The compiler expects the downloaded expressions to be in the same format 
+    as local files, specifically UTF8-encoded source code text.
+
     For example, if our @id@ expression were hosted at @http://example.com/id@,
     then we would embed the expression within our code using:
 
     > #http://example.com/id
-
-    Or if the @id@ expression were hosted locally on port 8000, you would write:
-
-    > #http://localhost:8000/id
 -}
 
 module Morte.Import (
@@ -130,6 +129,7 @@ instance Show Cycle where
     Local imports are defined as:
 
     * A file
+
     * A URL with a host of @localhost@ or @127.0.0.1@
 
     All other imports are defined to be non-local

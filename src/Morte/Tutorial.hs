@@ -2103,9 +2103,100 @@ input to standard output:
     the constructors they are supposed to represent.  This was an intentional
     design feature of Boehm-Berarducci encoding known as \"representability\".
 
-    You can also import expressions hosted on network endpoints.  See the
-    documentation in the "Morte.Import" module for more details about the syntax
-    for network imports.
+    The <https://github.com/Gabriel439/Haskell-Morte-Library Morte repository>
+    provides a simple Prelude of utilities that you can try out.  For example,
+    if you @cd@ to the @local@ directory of the repository, you can run
+    expressions like:
+
+> $ morte
+> #id #Bool #Bool/True
+> <Ctrl-D>
+> ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
+> 
+> λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True
+> $ morte > exampleNumber  # Save an example number to the file `exampleNumber`
+> #Nat/Succ (#Nat/Succ (#Nat/Succ #Nat/Zero ))
+> <Ctrl-D>
+> ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
+> 
+> $ morte  # Now we can import our saved number
+> #Nat/(+) #exampleNumber #exampleNumber
+> <Ctrl-D>
+> ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
+> 
+> λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ (Succ (Succ (Succ Zero)))))
+> $ morte  # Now
+> #even #exampleNumber
+> <Ctrl-D>
+> ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
+> 
+> λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → False
+> $ morte > exampleList  #Save an example list to the file `exampleList`
+> #List/Cons #Bool #Bool/True (#List/Cons #Bool #Bool/True (#List/Cons #Bool #Bool/False (#List/Nil #Bool )))
+> <Ctrl-D>
+> ∀(List : *) → ∀(Cons : ∀(head : ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool) → ∀(tail : List) → List) → ∀(Nil : List) → List
+> 
+> $ morte
+> #length #Bool #exampleList
+> <Ctrl-D>
+> ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
+> 
+> λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ Zero))
+> $ morte
+> #Bool/and #exampleList
+> <Ctrl-D>
+> ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
+> 
+> λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → False
+> $ morte > double  # We can even save functions
+> \(n : #Nat ) -> #Nat/(+) n n
+> <Ctrl-D>
+> ∀(n : ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat) → ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
+> $ morte  # ... then reuse those saved functions
+> #double #exampleNumber
+> <Ctrl-D>
+> ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
+> 
+> λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ (Succ (Succ (Succ Zero)))))
+
+    You can also import expressions hosted on network endpoints.  For example,
+    there are several example expressions hosted at:
+
+    <http://sigil.place/tutorial/1.2>
+
+    We could either import these expressions directly by referencing their URLs:
+
+> $ morte
+> #http://sigil.place/tutorial/1.2/id       
+>     #http://sigil.place/tutorial/1.2/Bool
+>     #http://sigil.place/tutorial/1.2/Bool/True
+> <Ctrl-D>
+> ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
+> 
+> λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True
+
+    ... or we could use local files to create short aliases for these URLs:
+
+> $ echo "#http://sigil.place/tutorial/1.2/id" > id
+> $ echo "#http://sigil.place/tutorial/1.2/Bool" > Bool
+> $ mkdir Bool
+> $ echo "#http://sigil.place/tutorial/1.2/Bool/True" > Bool/True
+
+    Now whenever we reference these local files they will in turn download the
+    expressions hosted on the URL that they point to:
+
+> $ morte
+> #id #Bool #Bool/True  -- Exact same result, except using remote code
+> <Ctrl-D>
+> ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
+> 
+> λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True
+ 
+    In fact, the @remote@ directory in the @morte@ repository does exactly this,
+    mirroring the structure of the @local@ directory except all the files are
+    just references to network-hosted expressions.  If you @cd@ to the @remote@
+    directory all of the above examples will still work, except this time when
+    you compile the examples they will download the expressions from the server.
 -}
 
 {- $portability
