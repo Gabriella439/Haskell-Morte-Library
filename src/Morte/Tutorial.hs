@@ -2171,7 +2171,11 @@ input to standard output:
     <http://sigil.place/tutorial/1.2>
 
     You can browse the above link and see that it's just an ordinary static web
-    server hosting a directory full of source code.
+    server hosting a directory full of source code.  We can use @curl@ to see
+    that the hosted files are just ordinary UTF8-encoded text expressions:
+
+> $ curl http://sigil.place/tutorial/1.2/id
+> λ(a : *) → λ(x : a) → x
 
     We can either import these expressions directly by referencing their URLs:
 
@@ -2187,15 +2191,15 @@ input to standard output:
     ... or we could use local files to create short aliases for these URLs:
 
 > $ echo "#http://sigil.place/tutorial/1.2/id" > id
-> $ echo "#http://sigil.place/tutorial/1.2/Bool" > Bool
 > $ mkdir Bool
+> $ echo "#http://sigil.place/tutorial/1.2/Bool" > Bool/@
 > $ echo "#http://sigil.place/tutorial/1.2/Bool/True" > Bool/True
 
     Now whenever we reference these local files they will in turn download the
     expressions hosted on the URL that they point to:
 
 > $ morte
-> #id #Bool #Bool/True  -- Exact same result, except using remote code
+> #id #Bool #Bool/True  -- Exact same result, except now using remote code
 > <Ctrl-D>
 > ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
 > 
