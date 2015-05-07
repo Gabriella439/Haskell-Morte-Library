@@ -2126,7 +2126,7 @@ input to standard output:
 > ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
 > 
 > λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ (Succ (Succ (Succ Zero)))))
-> $ morte  # Now
+> $ morte
 > #even #exampleNumber
 > <Ctrl-D>
 > ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
