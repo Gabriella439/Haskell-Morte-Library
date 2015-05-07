@@ -57,6 +57,10 @@
     then we would embed the expression within our code using:
 
     > #http://example.com/id
+
+    You can also reuse directory names as expressions.  If you provide a path
+    to a local or remote directory then the compiler will look for a file named
+    @\@@ within that directory and use that file to represent the directory.
 -}
 
 module Morte.Import (

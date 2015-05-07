@@ -74,6 +74,7 @@ module Morte.Tutorial (
     ) where
 
 import Morte.Core
+import Morte.Import (ReferentiallyOpaque)
 
 {- $introduction
     You can test out your first Morte program using the @morte@ executable
@@ -2159,12 +2160,20 @@ input to standard output:
 > 
 > λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ (Succ (Succ (Succ Zero)))))
 
+    Notice that some paths (like @#Bool@) actually point to directories.  If you
+    provide a directory then Morte will look for a file named @\'\@\'@ located
+    underneath that directory and use that instead.  So, for example, if we
+    specify @#Bool@ that actually translates to the file located at @Bool/\@@.
+
     You can also import expressions hosted on network endpoints.  For example,
     there are several example expressions hosted at:
 
     <http://sigil.place/tutorial/1.2>
 
-    We could either import these expressions directly by referencing their URLs:
+    You can browse the above link and see that it's just an ordinary static web
+    server hosting a directory full of source code.
+
+    We can either import these expressions directly by referencing their URLs:
 
 > $ morte
 > #http://sigil.place/tutorial/1.2/id       
@@ -2197,6 +2206,34 @@ input to standard output:
     just references to network-hosted expressions.  If you @cd@ to the @remote@
     directory all of the above examples will still work, except this time when
     you compile the examples they will download the expressions from the server.
+
+    Remote expressions can reference other remote expressions, and the compiler
+    will track down and resolve all of these references, taking care to avoid
+    cycles.  This means that you can host code on the network that references
+    other people's code on the network just by supplying the appropriate URL
+    wherever you want to embed their expression.
+
+    For example, suppose that we wished to take our contrived example and host
+    it on the network.  We'd simply host this text on any URL that we own:
+
+> #http://sigil.place/tutorial/1.2/id
+>     #http://sigil.place/tutorial/1.2/Bool
+>     #http://sigil.place/tutorial/1.2/Bool/True
+
+    ... and then other people would be able to import our code within their
+    programs by referencing our URL.  Then when they downloaded our expression
+    the compiler would further resolve the URLs embedded within our expression.
+
+    Note that when we host an expression on the network we can no longer use
+    local imports within our code.  For example, you cannot host code like this:
+
+> #id #Bool #Bool/True
+
+    ... because client compilers that download your code would have no way of
+    retrieving your local files.  Fortunately, the compiler enforces that all
+    code downloaded from the network may only contain URL imports and will fail
+    with a `ReferentiallyOpaque` exception at compile time if any downloaded
+    code contains a local file import.
 -}
 
 {- $portability
