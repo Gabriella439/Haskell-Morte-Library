@@ -212,7 +212,8 @@ instance Eq X where
 instance Show X where
     show = absurd
 
-instance NFData X
+instance NFData X where
+    rnf x = seq x ()
 
 -- | Syntax tree for expressions
 data Expr a
