@@ -2039,15 +2039,34 @@ input to standard output:
     with a hash tag.  For example:
 
 > $ morte
-> #Succ (#Succ (#Succ #Zero))
+> #Succ (#Succ (#Succ #Zero ))
 > <Ctrl-D>
 > ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
 >
 > λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ Zero))
 
-    The way this works is that each hashtag is replaced with the expression
-    from that file, so it would be as if you wrote the following really long
-    expression:
+    Take care that you must have whitespace after the hashtag import.  If you
+    were to write:
+
+> $ morte
+> #Succ (#Succ (#Succ #Zero))
+
+    ... then you would get this parsing error:
+
+> Line:   2
+> Column: 1
+> 
+> Parsing: EOF
+> 
+> Error: Parsing failed
+
+    This is because @morte@ permits parentheses in file names, so in the
+    above program @morte@ thinks that you are trying to import a file named
+    @Zero))@.  This causes a parsing failure because @morte@ can no longer find
+    the program's closing parentheses.
+
+    When you use imports, each hashtag is replaced with the expression from that
+    file, so it would be as if you wrote the following really long expression:
 
 > $ morte
 > -- #Succ
