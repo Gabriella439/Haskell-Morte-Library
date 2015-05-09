@@ -522,7 +522,7 @@ buildPath (URL  str ) = "#" <> Builder.fromString str
 
 > subst x n C B  ~  B[x@n := C]
 -}
-subst :: Text -> Int -> Expr X -> Expr X -> Expr X
+subst :: Text -> Int -> Expr a -> Expr a -> Expr a
 subst x n e' e = case e of
     Lam x' _A  b  -> Lam x' (subst x n e' _A)  b'
       where
@@ -535,12 +535,13 @@ subst x n e' e = case e of
     App f a       -> App (subst x n e' f) (subst x n e' a)
     Var (V x' n') -> if x == x' && n == n' then e' else e
     Const k       -> Const k
-    Import p      -> absurd p
+    -- This assumes that all imports are closed expressions
+    Import p      -> Import p
 
 {-| @shift n x@ adds @n@ to the index of all free variables named @x@ within an
     `Expr`
 -}
-shift :: Int -> Text -> Expr X -> Expr X
+shift :: Int -> Text -> Expr a -> Expr a
 shift d x0 e0 = go e0 0
   where
     go e c = case e of
@@ -555,7 +556,8 @@ shift d x0 e0 = go e0 0
           where
             n' = if x == x0 && n >= c then n + d else n
         Const k       -> Const k
-        Import p      -> absurd p
+        -- This assumes that all imports are closed expressions
+        Import p      -> Import p
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
@@ -623,7 +625,7 @@ whnf e = case e of
     _       -> e
 
 -- | Returns whether a variable is free in an expression
-freeIn :: Var -> Expr X -> Bool
+freeIn :: Var -> Expr a -> Bool
 freeIn v@(V x n) = go
   where
     go e = case e of
@@ -638,7 +640,8 @@ freeIn v@(V x n) = go
         Var v'      -> v == v'
         App f a     -> go f || go a
         Const _     -> False
-        Import p    -> absurd p
+        -- This assumes that all imports are closed expressions
+        Import _    -> False
 
 {-| Reduce an expression to its normal form, performing both beta reduction and
     eta reduction
