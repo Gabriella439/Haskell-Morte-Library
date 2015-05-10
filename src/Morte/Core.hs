@@ -65,17 +65,17 @@ module Morte.Core (
     ) where
 
 import Control.Applicative (Applicative(pure, (<*>)), (<$>))
-import Control.DeepSeq
+import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception)
 import Control.Monad.Trans.State (evalState)
 import qualified Control.Monad.Trans.State as State
-import Data.Binary (Binary(get, put), Get, Put)
+import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
 import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
 import Data.Monoid (mempty, (<>))
-import Data.String (IsString(fromString))
+import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text, unpack)
 import qualified Data.Text.Encoding as Text
@@ -235,7 +235,7 @@ data Expr a
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a        ~  f a
     | App (Expr a) (Expr a)
-    -- | > Import file    ~  #file
+    -- | > Import path    ~  #path
     | Import a
     deriving (Show)
 
