@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -58,26 +57,17 @@ module Morte.Core (
 
     -- * Utilities
     shift,
-    prettyExpr,
-    prettyTypeError,
+    pretty,
 
     -- * Errors
     TypeError(..),
     TypeMessage(..),
-
-    -- * Builders
-    buildConst,
-    buildVar,
-    buildExpr,
-    buildTypeMessage,
-    buildTypeError,
-    buildPath,
     ) where
 
 import Control.Applicative (Applicative(pure, (<*>)), (<$>))
 import Control.DeepSeq
 import Control.Exception (Exception)
-import Control.Monad.Trans.State (State, evalState)
+import Control.Monad.Trans.State (evalState)
 import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(get, put), Get, Put)
 import Data.Binary.Get (getWord64le)
@@ -86,12 +76,11 @@ import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
 import Data.Monoid (mempty, (<>))
 import Data.String (IsString(fromString))
+import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text, unpack)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text
-import Data.Text.Lazy.Builder (Builder)
 import qualified Data.Text.Lazy.Builder as Builder
-import Data.Text.Lazy.Builder.Int as Builder
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
@@ -155,6 +144,9 @@ instance IsString Var
 instance NFData Var where
   rnf (V n p) = rnf n `seq` rnf p
 
+instance Buildable Var where
+    build (V txt n) = build txt <> if n == 0 then "" else ("@" <> build n)
+
 {-| Constants for the calculus of constructions
 
     The only axiom is:
@@ -185,6 +177,11 @@ instance Binary Const where
 instance NFData Const where
     rnf c = seq c ()
 
+instance Buildable Const where
+    build c = case c of
+        Star -> "*"
+        Box  -> "□"
+
 axiom :: Const -> Either TypeError Const
 axiom Star = return Box
 axiom Box  = Left (TypeError [] (Const Box) (Untyped Box))
@@ -201,6 +198,12 @@ data Path
     | URL  String
     deriving (Eq, Ord, Show)
 
+instance Buildable Path where
+    build (File file) = "#" <> build (toText' file)
+      where
+        toText' = either id id . Filesystem.toText
+    build (URL  str ) = "#" <> build str
+
 {-| Like `Data.Void.Void`, except with an `NFData` instance in order to avoid
     orphan instances
 -}
@@ -214,6 +217,9 @@ instance Show X where
 
 instance NFData X where
     rnf x = seq x ()
+
+instance Buildable X where
+    build = absurd
 
 -- | Syntax tree for expressions
 data Expr a
@@ -300,10 +306,10 @@ match xL nL xR nR ((xL', xR'):xs) = nL' `seq` nR' `seq` match xL nL' xR nR' xs
     nL' = if xL == xL' then nL - 1 else nL
     nR' = if xR == xR' then nR - 1 else nR
 
-instance Eq (Expr X) where
+instance Eq a => Eq (Expr a) where
     eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
       where
-        go :: Expr X -> Expr X -> State [(Text, Text)] Bool
+--      go :: Expr a -> Expr a -> State [(Text, Text)] Bool
         go (Const cL) (Const cR) = return (cL == cR)
         go (Var (V xL nL)) (Var (V xR nR)) = do
             ctx <- State.get
@@ -379,6 +385,37 @@ instance NFData a => NFData (Expr a) where
         App f a     -> rnf f `seq` rnf a
         Import p    -> rnf p
 
+-- | Generates a syntactically valid Morte program
+instance Buildable a => Buildable (Expr a)
+  where
+    build = go False False
+      where
+        go parenBind parenApp e = case e of
+            Const c    -> build c
+            Var x      -> build x
+            Lam x _A b ->
+                    (if parenBind then "(" else "")
+                <>  "λ("
+                <>  build x
+                <>  " : "
+                <>  go False False _A
+                <>  ") → "
+                <>  go False False b
+                <>  (if parenBind then ")" else "")
+            Pi  x _A b ->
+                    (if parenBind then "(" else "")
+                <>  (if x /= "_"
+                     then "∀(" <> build x <> " : " <> go False False _A <> ")"
+                     else go True False _A )
+                <>  " → "
+                <>  go False False b
+                <>  (if parenBind then ")" else "")
+            App f a    ->
+                    (if parenApp then "(" else "")
+                <>  go True False f <> " " <> go True True a
+                <>  (if parenApp then ")" else "")
+            Import p   -> build p
+
 {-| Bound variable names and their types
 
     Variable names may appear more than once in the `Context`.  The `Var` @x\@n@
@@ -406,6 +443,28 @@ instance NFData TypeMessage where
         TypeMismatch e1 e2  -> rnf e1 `seq` rnf e2
         Untyped c           -> rnf c
 
+instance Buildable TypeMessage where
+    build msg = case msg of
+        UnboundVariable          ->
+                "Error: Unbound variable\n"
+        InvalidInputType expr    ->
+                "Error: Invalid input type\n"
+            <>  "\n"
+            <>  "Type: " <> build expr <> "\n"
+        InvalidOutputType expr   ->
+                "Error: Invalid output type\n"
+            <>  "\n"
+            <>  "Type: " <> build expr <> "\n"
+        NotAFunction             ->
+                "Error: Only functions may be applied to values\n"
+        TypeMismatch expr1 expr2 ->
+                "Error: Function applied to argument of the wrong type\n"
+            <>  "\n"
+            <>  "Expected type: " <> build expr1 <> "\n"
+            <>  "Argument type: " <> build expr2 <> "\n"
+        Untyped c                ->
+                "Error: " <> build c <> " has no type\n"
+
 -- | A structured type error that includes context
 data TypeError = TypeError
     { context     :: Context
@@ -414,109 +473,31 @@ data TypeError = TypeError
     } deriving (Typeable)
 
 instance Show TypeError where
-    show = unpack . prettyTypeError
+    show = unpack . pretty
 
 instance Exception TypeError
 
 instance NFData TypeError where
     rnf (TypeError ctx crr tym) = rnf ctx `seq` rnf crr `seq` rnf tym
 
--- | Render a pretty-printed `Const` as a `Builder`
-buildConst :: Const -> Builder
-buildConst c = case c of
-    Star -> "*"
-    Box  -> "□"
-
--- | Render a pretty-printed `Var` as a `Builder`
-buildVar :: Var -> Builder
-buildVar (V txt n) =
-        Builder.fromLazyText txt
-    <>  if n == 0 then mempty else ("@" <>  Builder.decimal n)
-
--- | Render a pretty-printed `Expr` as a `Builder`
-buildExpr :: Expr X -> Builder
-buildExpr = go False False
-  where
-    go :: Bool -> Bool -> Expr X -> Builder
-    go parenBind parenApp e = case e of
-        Const c    -> buildConst c
-        Var x      -> buildVar x
-        Lam x _A b ->
-                (if parenBind then "(" else "")
-            <>  "λ("
-            <>  Builder.fromLazyText x
-            <>  " : "
-            <>  go False False _A
-            <>  ") → "
-            <>  go False False b
-            <>  (if parenBind then ")" else "")
-        Pi  x _A b ->
-                (if parenBind then "(" else "")
-            <>  (if x /= "_"
-                 then    "∀("
-                     <>  Builder.fromLazyText x
-                     <>  " : "
-                     <>  go False False _A
-                     <>  ")"
-                 else go True False _A )
-            <>  " → "
-            <>  go False False b
-            <>  (if parenBind then ")" else "")
-        App f a    ->
-                (if parenApp then "(" else "")
-            <>  go True False f <> " " <> go True True a
-            <>  (if parenApp then ")" else "")
-        Import p   -> absurd p
-
--- | Render a pretty-printed `TypeMessage` as a `Builder`
-buildTypeMessage :: TypeMessage -> Builder
-buildTypeMessage msg = case msg of
-    UnboundVariable          ->
-            "Error: Unbound variable\n"
-    InvalidInputType expr    ->
-            "Error: Invalid input type\n"
+instance Buildable TypeError where
+    build (TypeError ctx expr msg)
+        =   "\n"
+        <>  (    if Text.null (Builder.toLazyText (buildContext ctx))
+                 then ""
+                 else "Context:\n" <> buildContext ctx <> "\n"
+            )
+        <>  "Expression: " <> build expr <> "\n"
         <>  "\n"
-        <>  "Type: " <> buildExpr expr <> "\n"
-    InvalidOutputType expr   ->
-            "Error: Invalid output type\n"
-        <>  "\n"
-        <>  "Type: " <> buildExpr expr <> "\n"
-    NotAFunction             ->
-            "Error: Only functions may be applied to values\n"
-    TypeMismatch expr1 expr2 ->
-            "Error: Function applied to argument of the wrong type\n"
-        <>  "\n"
-        <>  "Expected type: " <> buildExpr expr1 <> "\n"
-        <>  "Argument type: " <> buildExpr expr2 <> "\n"
-    Untyped c                ->
-            "Error: " <> buildConst c <> " has no type\n"
+        <>  build msg
+      where
+        buildKV (key, val) = build key <> " : " <> build val
 
--- | Render a pretty-printed `TypeError` as a `Builder`
-buildTypeError :: TypeError -> Builder
-buildTypeError (TypeError ctx expr msg)
-    =   "\n"
-    <>  (    if Text.null (Builder.toLazyText (buildContext ctx))
-             then mempty
-             else "Context:\n" <> buildContext ctx <> "\n"
-        )
-    <>  "Expression: " <> buildExpr expr <> "\n"
-    <>  "\n"
-    <>  buildTypeMessage msg
-  where
-    buildKV (key, val) = Builder.fromLazyText key <> " : " <> buildExpr val
-
-    buildContext =
-            Builder.fromLazyText
-        .   Text.unlines
-        .   map (Builder.toLazyText . buildKV)
-        .   reverse
-
--- | Render pretty-printed `Path` as a `Builder`
-buildPath :: Path -> Builder
-buildPath (File file) = "#" <> Builder.fromText (toText' file)
-  where
-    toText' = either id id . Filesystem.toText
-buildPath (URL  str ) = "#" <> Builder.fromString str
+        buildContext =
+                Builder.fromLazyText
+            .   Text.unlines
+            .   map (Builder.toLazyText . buildKV)
+            .   reverse
 
 {-| Substitute all occurrences of a variable with an expression
 
@@ -614,7 +595,7 @@ typeOf :: Expr X -> Either TypeError (Expr X)
 typeOf = typeWith []
 
 -- | Reduce an expression to weak-head normal form
-whnf :: Expr X -> Expr X
+whnf :: Expr a -> Expr a
 whnf e = case e of
     App f a -> case whnf f of
         Lam x _A b -> whnf (shift (-1) x b')  -- Beta reduce
@@ -650,7 +631,7 @@ freeIn v@(V x n) = go
     expressions before normalizing them since normalization can convert an
     ill-typed expression into a well-typed expression.
 -}
-normalize :: Expr X -> Expr X
+normalize :: Expr a -> Expr a
 normalize e = case e of
     Lam x _A b -> case b' of
         App f a -> case a of
@@ -674,15 +655,8 @@ normalize e = case e of
         f'         -> App f' (normalize a)
     Var   _    -> e
     Const _    -> e
-    Import p   -> absurd p
+    Import p   -> Import p
 
-{-| Pretty-print an expression
-
-    The result is a syntactically valid Morte program
--}
-prettyExpr :: Expr X -> Text
-prettyExpr = Builder.toLazyText . buildExpr
-
--- | Pretty-print a type error
-prettyTypeError :: TypeError -> Text
-prettyTypeError = Builder.toLazyText . buildTypeError
+-- | Pretty-print a value
+pretty :: Buildable a => a -> Text
+pretty = Builder.toLazyText . build

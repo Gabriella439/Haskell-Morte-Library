@@ -2,8 +2,8 @@ module Main where
 
 import Data.Monoid (mempty)
 import qualified Data.Text.Lazy.IO as Text
-import Morte.Core (typeOf, prettyTypeError, prettyExpr, normalize)
-import Morte.Parser (exprFromText, prettyParseError)
+import Morte.Core (typeOf, pretty, normalize)
+import Morte.Parser (exprFromText)
 import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
@@ -23,15 +23,15 @@ main = do
     inText <- Text.getContents
     case exprFromText inText of
         Left  pe   -> do
-            Text.hPutStr stderr (prettyParseError pe)
+            Text.hPutStr stderr (pretty pe)
             exitFailure
         Right expr -> do
             expr' <- load expr
             case typeOf expr' of
                 Left  te       -> do
-                    Text.hPutStr stderr (prettyTypeError te)
+                    Text.hPutStr stderr (pretty te)
                     exitFailure
                 Right typeExpr -> do
-                    Text.hPutStrLn stderr (prettyExpr (normalize typeExpr))
+                    Text.hPutStrLn stderr (pretty (normalize typeExpr))
                     Text.hPutStrLn stderr mempty
-                    Text.putStrLn (prettyExpr (normalize expr'))
+                    Text.putStrLn (pretty (normalize expr'))

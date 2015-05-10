@@ -80,6 +80,7 @@ import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Monoid ((<>))
+import Data.Text.Buildable (build)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Encoding as Text
 import Data.Text.Lazy.Builder (Builder)
@@ -95,7 +96,7 @@ import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
 import Prelude hiding (FilePath)
 
-import Morte.Core (Expr, Path(..), X(..), buildPath, typeOf)
+import Morte.Core (Expr, Path(..), X(..), typeOf)
 import Morte.Parser (exprFromText)
 
 builderToString :: Builder -> String
@@ -110,7 +111,7 @@ newtype Cycle = Cycle
 instance Exception Cycle
 
 instance Show Cycle where
-    show (Cycle path) = "Cyclic import: " ++ builderToString (buildPath path)
+    show (Cycle path) = "Cyclic import: " ++ builderToString (build path)
 
 {-| Morte tries to ensure that all expressions hosted on network endpoints are
     weakly referentially transparent, meaning roughly that any two clients will
@@ -146,7 +147,7 @@ instance Exception ReferentiallyOpaque
 
 instance Show ReferentiallyOpaque where
     show (ReferentiallyOpaque path) =
-        "Referentially opaque import: " ++ builderToString (buildPath path)
+        "Referentially opaque import: " ++ builderToString (build path)
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
@@ -159,7 +160,7 @@ instance Exception e => Exception (Imported e)
 instance Show e => Show (Imported e) where
     show (Imported paths e) =
             "\n"
-        ++  unlines (map (\path -> "⤷ " ++ builderToString (buildPath path))
+        ++  unlines (map (\path -> "⤷ " ++ builderToString (build path))
                          (reverse paths) )
         ++  show e
 

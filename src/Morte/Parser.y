@@ -9,7 +9,6 @@ module Morte.Parser (
     exprFromText,
 
     -- * Errors
-    prettyParseError,
     ParseError(..),
     ParseMessage(..)
     ) where
@@ -19,10 +18,10 @@ import Control.Monad.Trans.Error (ErrorT, Error(..), throwError, runErrorT)
 import Control.Monad.Trans.State.Strict (State, runState)
 import Data.Functor.Identity (Identity, runIdentity)
 import Data.Monoid (mempty, (<>))
+import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
-import qualified Data.Text.Lazy.Builder as Builder
-import Data.Text.Lazy.Builder.Int (decimal)
+import Data.Text.Lazy.Builder (toLazyText)
 import Data.Typeable (Typeable)
 import Lens.Family.Stock (_1, _2)
 import Lens.Family.State.Strict ((.=), use, zoom)
@@ -137,27 +136,26 @@ data ParseError = ParseError
     } deriving (Typeable)
 
 instance Show ParseError where
-    show = Text.unpack . prettyParseError
+    show = Text.unpack . toLazyText . build
 
 instance Exception ParseError
 
--- | Pretty-print a `ParseError`
-prettyParseError :: ParseError -> Text
-prettyParseError (ParseError (Lexer.P l c) e) = Builder.toLazyText (
-        "\n"
-    <>  "Line:   " <> decimal l <> "\n"
-    <>  "Column: " <> decimal c <> "\n"
-    <>  "\n"
-    <>  case e of
-        Lexing r  ->
-                "Lexing: \"" <> Builder.fromLazyText remainder <> dots <> "\"\n"
-            <>  "\n"
-            <>  "Error: Lexing failed\n"
-          where
-            remainder = Text.takeWhile (/= '\n') (Text.take 64 r)
-            dots      = if Text.length r > 64 then "..." else mempty
-        Parsing t ->
-                "Parsing: " <> Builder.fromString (show t) <> "\n"
-            <>  "\n"
-            <>  "Error: Parsing failed\n" )
+instance Buildable ParseError where
+    build (ParseError (Lexer.P l c) e) =
+            "\n"
+        <>  "Line:   " <> build l <> "\n"
+        <>  "Column: " <> build c <> "\n"
+        <>  "\n"
+        <>  case e of
+            Lexing r  ->
+                    "Lexing: \"" <> build remainder <> dots <> "\"\n"
+                <>  "\n"
+                <>  "Error: Lexing failed\n"
+              where
+                remainder = Text.takeWhile (/= '\n') (Text.take 64 r)
+                dots      = if Text.length r > 64 then "..." else mempty
+            Parsing t ->
+                    "Parsing: " <> build (show t) <> "\n"
+                <>  "\n"
+                <>  "Error: Parsing failed\n"
 }
