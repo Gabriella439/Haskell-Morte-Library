@@ -2,7 +2,7 @@ module Main (main) where
 
 import Morte.Core
 import Morte.Import (load)
-import Morte.Parser (ParseError, exprFromText, prettyParseError)
+import Morte.Parser (ParseError, exprFromText)
 
 import Control.Monad     (foldM)
 import Criterion.Main    (Benchmark, defaultMain, env, bgroup, bench, nf)
@@ -37,7 +37,7 @@ partitionExpr (pe, ps) (filename, contents) =
             return (pe,(filename,expr'):ps)
 
 pprFileParseError :: (String, ParseError) -> Text
-pprFileParseError (fn,pe) = T.unlines [T.pack fn, prettyParseError pe]
+pprFileParseError (fn,pe) = T.unlines [T.pack fn, pretty pe]
 
 srcEnv :: IO [(String, Expr X)]
 srcEnv = do
