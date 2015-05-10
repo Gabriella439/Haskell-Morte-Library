@@ -313,13 +313,13 @@ instance Eq a => Eq (Expr a) where
 
 instance Binary a => Binary (Expr a) where
     put e = case e of
-        Const c    -> do
+        Const c     -> do
             put (0 :: Word8)
             put c
-        Var x      -> do
+        Var x       -> do
             put (1 :: Word8)
             put x
-        Lam x _A b -> do
+        Lam x _A b  -> do
             put (2 :: Word8)
             putUtf8 x
             put _A
@@ -470,7 +470,7 @@ instance Buildable TypeError where
         buildKV (key, val) = build key <> " : " <> build val
 
         buildContext =
-                Builder.fromLazyText
+                build
             .   Text.unlines
             .   map (Builder.toLazyText . buildKV)
             .   reverse
@@ -492,7 +492,7 @@ subst x n e' e = case e of
     App f a       -> App (subst x n e' f) (subst x n e' a)
     Var (V x' n') -> if x == x' && n == n' then e' else e
     Const k       -> Const k
-    -- This assumes that all imports are closed expressions
+    -- The Morte compiler enforces that all imports are closed expressions
     Import p      -> Import p
 
 {-| @shift n x@ adds @n@ to the index of all free variables named @x@ within an
@@ -502,19 +502,19 @@ shift :: Int -> Text -> Expr a -> Expr a
 shift d x0 e0 = go e0 0
   where
     go e c = case e of
-        Lam x _A  b  -> Lam x (go _A c) (go  b $! c')
+        Lam x _A  b -> Lam x (go _A c) (go  b $! c')
           where
             c' = if x == x0 then c + 1 else c
-        Pi  x _A _B  -> Pi  x (go _A c) (go _B $! c')
+        Pi  x _A _B -> Pi  x (go _A c) (go _B $! c')
           where
             c' = if x == x0 then c + 1 else c
-        App f a       -> App (go f c) (go a c)
+        App f a     -> App (go f c) (go a c)
         Var (V x n) -> n' `seq` Var (V x n')
           where
             n' = if x == x0 && n >= c then n + d else n
-        Const k       -> Const k
-        -- This assumes that all imports are closed expressions
-        Import p      -> Import p
+        Const k     -> Const k
+        -- The Morte compiler enforces that all imports are closed expressions
+        Import p    -> Import p
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
@@ -597,7 +597,7 @@ freeIn v@(V x n) = go
         Var v'      -> v == v'
         App f a     -> go f || go a
         Const _     -> False
-        -- This assumes that all imports are closed expressions
+        -- The Morte compiler enforces that all imports are closed expressions
         Import _    -> False
 
 {-| Reduce an expression to its normal form, performing both beta reduction and

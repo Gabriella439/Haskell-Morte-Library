@@ -263,7 +263,7 @@ loadStatic path = do
             if local path && not (local parent)
             then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
             else return ()
-        _       -> return ()
+        _        -> return ()
 
     let paths' = path:paths
     zoom stack (put paths')
@@ -276,9 +276,11 @@ loadStatic path = do
                 Nothing   -> do
                     expr' <- loadDynamic path
                     case traverse (\_ -> Nothing) expr' of
+                        -- No imports left
                         Just expr -> do
                             zoom cache (put $! Map.insert path expr m)
                             return expr
+                        -- Some imports left, so recurse
                         Nothing   -> fmap join (traverse loadStatic expr')
     case typeOf expr of
         Left  err -> liftIO (throwIO (Imported paths' err))
@@ -289,8 +291,7 @@ loadStatic path = do
 
 -- | Resolve all imports within an expression
 load :: Expr Path -> IO (Expr X)
-load expr = with
-    (evalStateT (fmap join (traverse loadStatic expr)) status)
-    return
+load expr =
+    with (evalStateT (fmap join (traverse loadStatic expr)) status) return
   where
     status = Status [] Map.empty Nothing
