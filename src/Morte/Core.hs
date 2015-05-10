@@ -1,4 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable     #-}
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -74,7 +77,7 @@ import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
 import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
-import Data.Monoid (mempty, (<>))
+import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text, unpack)
@@ -237,16 +240,7 @@ data Expr a
     | App (Expr a) (Expr a)
     -- | > Import path    ~  #path
     | Import a
-    deriving (Show)
-
-instance Functor Expr where
-    fmap k e = case e of
-        Const c     -> Const c
-        Var   v     -> Var v
-        Lam x _A  b -> Lam x (fmap k _A) (fmap k  b)
-        Pi  x _A _B -> Pi  x (fmap k _A) (fmap k _B)
-        App f a     -> App (fmap k f) (fmap k a)
-        Import p    -> Import (k p)
+    deriving (Functor, Foldable, Traversable, Show)
 
 instance Applicative Expr where
     pure = Import
@@ -269,24 +263,6 @@ instance Monad Expr where
         Pi  x _A _B -> Pi  x (_A >>= k) (_B >>= k)
         App f a     -> App (f >>= k) (a >>= k)
         Import r    -> k r
-
-instance Foldable Expr where
-    foldMap k e = case e of
-        Const _     -> mempty
-        Var   _     -> mempty
-        Lam _ _A  b -> foldMap k _A <> foldMap k  b
-        Pi  _ _A _B -> foldMap k _A <> foldMap k _B
-        App f a     -> foldMap k f <> foldMap k a
-        Import p    -> k p
-
-instance Traversable Expr where
-    traverse k e = case e of
-        Const c     -> pure (Const c)
-        Var   v     -> pure (Var v)
-        Lam x _A  b -> Lam x <$> traverse k _A <*> traverse k  b
-        Pi  x _A _B -> Pi  x <$> traverse k _A <*> traverse k _B
-        App f a     -> App <$> traverse k f <*> traverse k a
-        Import p    -> Import <$> k p
 
 lookupN :: Eq a => a -> [(a, b)] -> Int -> Maybe b
 lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
