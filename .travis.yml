@@ -1,6 +1,9 @@
 language: haskell
 
 ghc:
- - 7.6
- - 7.8
- - 7.10
+  - 7.6
+  - 7.8
+  - 7.10
+
+script:
+  - cabal clean && cabal configure --enable-tests && cabal build && cabal test
