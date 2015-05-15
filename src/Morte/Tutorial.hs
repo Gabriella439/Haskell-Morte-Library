@@ -2187,21 +2187,21 @@ input to standard output:
     You can also import expressions hosted on network endpoints.  For example,
     there are several example expressions hosted at:
 
-    <http://sigil.place/tutorial/1.2>
+    <http://sigil.place/tutorial/morte/1.2>
 
     You can browse the above link and see that it's just an ordinary static web
     server hosting a directory full of source code.  We can use @curl@ to see
     that the hosted files are just ordinary UTF8-encoded text expressions:
 
-> $ curl http://sigil.place/tutorial/1.2/id
+> $ curl http://sigil.place/tutorial/morte/1.2/id
 > λ(a : *) → λ(x : a) → x
 
     We can either import these expressions directly by referencing their URLs:
 
 > $ morte
-> #http://sigil.place/tutorial/1.2/id       
->     #http://sigil.place/tutorial/1.2/Bool
->     #http://sigil.place/tutorial/1.2/Bool/True
+> #http://sigil.place/tutorial/morte/1.2/id       
+>     #http://sigil.place/tutorial/morte/1.2/Bool
+>     #http://sigil.place/tutorial/morte/1.2/Bool/True
 > <Ctrl-D>
 > ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
 > 
@@ -2209,10 +2209,10 @@ input to standard output:
 
     ... or we could use local files to create short aliases for these URLs:
 
-> $ echo "#http://sigil.place/tutorial/1.2/id" > id
+> $ echo "#http://sigil.place/tutorial/morte/1.2/id" > id
 > $ mkdir Bool
-> $ echo "#http://sigil.place/tutorial/1.2/Bool" > Bool/@
-> $ echo "#http://sigil.place/tutorial/1.2/Bool/True" > Bool/True
+> $ echo "#http://sigil.place/tutorial/morte/1.2/Bool" > Bool/@
+> $ echo "#http://sigil.place/tutorial/morte/1.2/Bool/True" > Bool/True
 
     Now whenever we reference these local files they will in turn download the
     expressions hosted on the URL that they point to:
@@ -2239,9 +2239,9 @@ input to standard output:
     For example, suppose that we wished to take our contrived example and host
     it on the network.  We'd simply host this text on any URL that we own:
 
-> #http://sigil.place/tutorial/1.2/id
->     #http://sigil.place/tutorial/1.2/Bool
->     #http://sigil.place/tutorial/1.2/Bool/True
+> #http://sigil.place/tutorial/morte/1.2/id
+>     #http://sigil.place/tutorial/morte/1.2/Bool
+>     #http://sigil.place/tutorial/morte/1.2/Bool/True
 
     ... and then other people would be able to import our code within their
     programs by referencing our URL.  Then when they downloaded our expression
