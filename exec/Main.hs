@@ -1,5 +1,6 @@
 module Main where
 
+import Control.Exception (Exception, throwIO)
 import Data.Monoid (mempty)
 import qualified Data.Text.Lazy.IO as Text
 import Morte.Core (typeOf, pretty, normalize)
@@ -9,6 +10,11 @@ import System.IO (stderr)
 import System.Exit (exitFailure)
 
 import Morte.Import (load)
+
+throws :: Exception e => Either e a -> IO a
+throws x = case x of
+    Left  e -> throwIO e
+    Right r -> return r
 
 main :: IO ()
 main = do
@@ -20,18 +26,10 @@ main = do
                      \to standard error, and writing the normalized program to\
                      \standard output"
         )
-    inText <- Text.getContents
-    case exprFromText inText of
-        Left  pe   -> do
-            Text.hPutStr stderr (pretty pe)
-            exitFailure
-        Right expr -> do
-            expr' <- load expr
-            case typeOf expr' of
-                Left  te       -> do
-                    Text.hPutStr stderr (pretty te)
-                    exitFailure
-                Right typeExpr -> do
-                    Text.hPutStrLn stderr (pretty (normalize typeExpr))
-                    Text.hPutStrLn stderr mempty
-                    Text.putStrLn (pretty (normalize expr'))
+    inText   <- Text.getContents
+    expr     <- throws (exprFromText inText)
+    expr'    <- load expr
+    typeExpr <- throws (typeOf expr')
+    Text.hPutStrLn stderr (pretty (normalize typeExpr))
+    Text.hPutStrLn stderr mempty
+    Text.putStrLn (pretty (normalize expr'))
