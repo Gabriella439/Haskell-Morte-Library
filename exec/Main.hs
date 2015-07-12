@@ -12,9 +12,8 @@ import System.Exit (exitFailure)
 import Morte.Import (load)
 
 throws :: Exception e => Either e a -> IO a
-throws x = case x of
-    Left  e -> throwIO e
-    Right r -> return r
+throws (Left  e) = throwIO e
+throws (Right r) = return r
 
 main :: IO ()
 main = do
