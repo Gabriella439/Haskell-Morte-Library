@@ -202,10 +202,10 @@ data Path
     deriving (Eq, Ord, Show)
 
 instance Buildable Path where
-    build (File file) = "#" <> build (toText' file)
+    build (File file) = "#" <> build (toText' file) <> " "
       where
         toText' = either id id . Filesystem.toText
-    build (URL  str ) = "#" <> build str
+    build (URL  str ) = "#" <> build str <> " "
 
 {-| Like `Data.Void.Void`, except with an `NFData` instance in order to avoid
     orphan instances
