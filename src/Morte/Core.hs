@@ -60,6 +60,7 @@ module Morte.Core (
 
     -- * Utilities
     shift,
+    subst,
     pretty,
 
     -- * Errors
