@@ -23,8 +23,8 @@ import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import Data.Text.Lazy.Builder (toLazyText)
 import Data.Typeable (Typeable)
-import Lens.Family.Stock (_1, _2)
-import Lens.Family.State.Strict ((.=), use, zoom)
+import Lens.Micro (_1, _2)
+import Lens.Micro.Mtl ((.=), use, zoom)
 import Morte.Core (Var(..), Const(..), Path(..), Expr(..))
 import qualified Morte.Lexer as Lexer
 import Morte.Lexer (Token, Position)
