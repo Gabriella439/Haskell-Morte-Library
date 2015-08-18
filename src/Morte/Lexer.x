@@ -19,7 +19,7 @@ import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
 import qualified Filesystem.Path.CurrentOS as Filesystem
-import Lens.Family.State.Strict ((.=), (+=))
+import Lens.Micro.Mtl ((.=), (+=))
 import Pipes (Producer, lift, yield)
 import Prelude hiding (FilePath)
 

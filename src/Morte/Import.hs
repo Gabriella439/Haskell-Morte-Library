@@ -89,8 +89,8 @@ import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>))
 import Filesystem as Filesystem
-import Lens.Family (LensLike')
-import Lens.Family.State.Strict (zoom)
+import Lens.Micro (Lens')
+import Lens.Micro.Mtl (zoom)
 import Network.HTTP.Client (Manager)
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
@@ -170,13 +170,13 @@ data Status = Status
     , _manager :: Maybe Manager
     }
 
-stack :: Functor f => LensLike' f Status [Path]
+stack :: Lens' Status [Path]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-cache :: Functor f => LensLike' f Status (Map Path (Expr X))
+cache :: Lens' Status (Map Path (Expr X))
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
-manager :: Functor f => LensLike' f Status (Maybe Manager)
+manager :: Lens' Status (Maybe Manager)
 manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
 
 needManager :: StateT Status Managed Manager
