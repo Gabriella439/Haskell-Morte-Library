@@ -239,12 +239,12 @@ data Expr a
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a        ~  f a
     | App (Expr a) (Expr a)
-    -- | > Import path    ~  #path
-    | Import a
+    -- | > Embed path     ~  #path
+    | Embed a
     deriving (Functor, Foldable, Traversable, Show)
 
 instance Applicative Expr where
-    pure = Import
+    pure = Embed
 
     mf <*> mx = case mf of
         Const c     -> Const c
@@ -252,10 +252,10 @@ instance Applicative Expr where
         Lam x _A  b -> Lam x (_A <*> mx) ( b <*> mx)
         Pi  x _A _B -> Pi  x (_A <*> mx) (_B <*> mx)
         App f a     -> App (f <*> mx) (a <*> mx)
-        Import f    -> fmap f mx
+        Embed f     -> fmap f mx
 
 instance Monad Expr where
-    return = Import
+    return = Embed
 
     m >>= k = case m of
         Const c     -> Const c
@@ -263,7 +263,7 @@ instance Monad Expr where
         Lam x _A  b -> Lam x (_A >>= k) ( b >>= k)
         Pi  x _A _B -> Pi  x (_A >>= k) (_B >>= k)
         App f a     -> App (f >>= k) (a >>= k)
-        Import r    -> k r
+        Embed r     -> k r
 
 lookupN :: Eq a => a -> [(a, b)] -> Int -> Maybe b
 lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
@@ -309,7 +309,7 @@ instance Eq a => Eq (Expr a) where
             b1 <- go fL fR
             b2 <- go aL aR
             return (b1 && b2)
-        go (Import pL) (Import pR) = return (pL == pR)
+        go (Embed pL) (Embed pR) = return (pL == pR)
         go _ _ = return False
 
 instance Binary a => Binary (Expr a) where
@@ -334,7 +334,7 @@ instance Binary a => Binary (Expr a) where
             put (4 :: Word8)
             put f
             put a
-        Import p    -> do
+        Embed p     -> do
             put (5 :: Word8)
             put p
 
@@ -346,7 +346,7 @@ instance Binary a => Binary (Expr a) where
             2 -> Lam <$> getUtf8 <*> get <*> get
             3 -> Pi  <$> getUtf8 <*> get <*> get
             4 -> App <$> get <*> get
-            5 -> Import <$> get
+            5 -> Embed <$> get
             _ -> fail "get Expr: Invalid tag byte"
 
 instance IsString (Expr a)
@@ -360,7 +360,7 @@ instance NFData a => NFData (Expr a) where
         Lam x _A b  -> rnf x `seq` rnf _A `seq` rnf b
         Pi  x _A _B -> rnf x `seq` rnf _A `seq` rnf _B
         App f a     -> rnf f `seq` rnf a
-        Import p    -> rnf p
+        Embed p     -> rnf p
 
 -- | Generates a syntactically valid Morte program
 instance Buildable a => Buildable (Expr a)
@@ -391,7 +391,7 @@ instance Buildable a => Buildable (Expr a)
                     (if parenApp then "(" else "")
                 <>  go True False f <> " " <> go True True a
                 <>  (if parenApp then ")" else "")
-            Import p   -> build p
+            Embed p    -> build p
 
 {-| Bound variable names and their types
 
@@ -493,8 +493,9 @@ subst x n e' e = case e of
     App f a       -> App (subst x n e' f) (subst x n e' a)
     Var (V x' n') -> if x == x' && n == n' then e' else e
     Const k       -> Const k
-    -- The Morte compiler enforces that all imports are closed expressions
-    Import p      -> Import p
+    -- The Morte compiler enforces that all embedded values
+    -- are closed expressions
+    Embed p       -> Embed p
 
 {-| @shift n x@ adds @n@ to the index of all free variables named @x@ within an
     `Expr`
@@ -514,8 +515,9 @@ shift d x0 e0 = go e0 0
           where
             n' = if x == x0 && n >= c then n + d else n
         Const k     -> Const k
-        -- The Morte compiler enforces that all imports are closed expressions
-        Import p    -> Import p
+        -- The Morte compiler enforces that all embedded values
+        -- are closed expressions
+        Embed p     -> Embed p
 
 {-| Type-check an expression and return the expression's type if type-checking
     suceeds or an error if type-checking fails
@@ -562,7 +564,7 @@ typeWith ctx e = case e of
                 let nf_A  = normalize _A
                     nf_A' = normalize _A'
                 Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
-    Import p    -> absurd p
+    Embed p     -> absurd p
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
@@ -598,8 +600,9 @@ freeIn v@(V x n) = go
         Var v'      -> v == v'
         App f a     -> go f || go a
         Const _     -> False
-        -- The Morte compiler enforces that all imports are closed expressions
-        Import _    -> False
+        -- The Morte compiler enforces that all embedded values
+        -- are closed expressions
+        Embed _     -> False
 
 {-| Reduce an expression to its normal form, performing both beta reduction and
     eta reduction
@@ -632,7 +635,7 @@ normalize e = case e of
         f'         -> App f' (normalize a)
     Var   _    -> e
     Const _    -> e
-    Import p   -> Import p
+    Embed p    -> Embed p
 
 -- | Pretty-print a value
 pretty :: Buildable a => a -> Text

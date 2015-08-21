@@ -73,7 +73,7 @@ AExpr :: { Expr Path }
     : VExpr                                   { Var $1       }
     | '*'                                     { Const Star   }
     | 'BOX'                                   { Const Box    }
-    | Import                                  { Import $1    }
+    | Import                                  { Embed $1     }
     | '(' Expr ')'                            { $2           }
 
 Import :: { Path }
