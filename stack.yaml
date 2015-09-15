@@ -1,5 +1,8 @@
 flags: {}
 packages:
 - '.'
+- location:
+    git: git@github.com:bos/text-format.git
+    commit: abc3862f893bfcd0841c2cda9100acdc89a15614
 extra-deps: []
-resolver: nightly-2015-11-22
+resolver: lts-5.1

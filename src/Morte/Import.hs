@@ -87,6 +87,7 @@ import Data.Text.Lazy.Builder (Builder)
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
+import Data.Void (Void, absurd)
 import Filesystem.Path ((</>))
 import Filesystem as Filesystem
 import Lens.Micro (Lens')
@@ -96,7 +97,7 @@ import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
 import Prelude hiding (FilePath)
 
-import Morte.Core (Expr, Path(..), X(..), typeOf)
+import Morte.Core (Expr, Path(..), typeOf)
 import Morte.Parser (exprFromText)
 
 builderToString :: Builder -> String
@@ -166,14 +167,14 @@ instance Show e => Show (Imported e) where
 
 data Status = Status
     { _stack   :: [Path]
-    , _cache   :: Map Path (Expr X)
+    , _cache   :: Map Path (Expr Void)
     , _manager :: Maybe Manager
     }
 
 stack :: Lens' Status [Path]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
 
-cache :: Lens' Status (Map Path (Expr X))
+cache :: Lens' Status (Map Path (Expr Void))
 cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 
 manager :: Lens' Status (Maybe Manager)
@@ -247,7 +248,7 @@ loadDynamic p = do
         Right expr -> return expr 
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
-loadStatic :: Path -> StateT Status Managed (Expr X)
+loadStatic :: Path -> StateT Status Managed (Expr Void)
 loadStatic path = do
     paths <- zoom stack get
 
@@ -290,7 +291,7 @@ loadStatic path = do
     return expr
 
 -- | Resolve all imports within an expression
-load :: Expr Path -> IO (Expr X)
+load :: Expr Path -> IO (Expr Void)
 load expr =
     with (evalStateT (fmap join (traverse loadStatic expr)) status) return
   where
