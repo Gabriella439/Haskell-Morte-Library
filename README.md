@@ -55,6 +55,24 @@ further simplify Morte code, but this is not urgent and definitely a lower
 priority than implementing front-end and back-end compilers.  If implemented,
 this would be entirely backwards compatible.
 
+## Regenerating .travis.yml
+
+Using https://github.com/hvr/multi-ghc-travis
+
+```
+../multi-ghc-travis/make_travis_yml.hs morte.cabal alex-3.1.4 happy-1.19.5 > .travis.yml
+```
+
+You need to put this in the ```before_install``` section so that cabal can find alex and happy:
+
+```
+ - export HAPPYVER=1.19.5
+ - export ALEXVER=3.1.4
+ - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:/opt/happy/$HAPPYVER/bin:/opt/alex/$ALEXVER/bin:$PATH
+```
+
+You need to remove ```- cabal check``` due to a warning about -O2 which makes the command return 1.
+
 ## License (BSD 3-clause)
 
 Copyright (c) 2014 Gabriel Gonzalez
