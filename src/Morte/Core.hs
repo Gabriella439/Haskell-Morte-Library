@@ -71,6 +71,7 @@ module Morte.Core (
 import Control.Applicative (Applicative(pure, (<*>)), (<$>))
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception)
+import Control.Monad (mzero)
 import Control.Monad.Trans.State (evalState)
 import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(..), Get, Put)
@@ -224,6 +225,10 @@ instance NFData X where
 
 instance Buildable X where
     build = absurd
+
+instance Binary X where
+    get = mzero
+    put = absurd
 
 -- | Syntax tree for expressions
 data Expr a
