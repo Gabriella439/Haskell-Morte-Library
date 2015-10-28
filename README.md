@@ -25,7 +25,7 @@ type to `stderr` and outputs the optimized program to `stdout`.  For example:
     $ # There was nothing to optimize
 
 To learn more, read the
-[Morte tutorial](http://hackage.haskell.org/packages/archive/morte/1.2.0/doc/html/Morte-Tutorial.html).
+[Morte tutorial](http://hackage.haskell.org/package/morte/docs/Morte-Tutorial.html).
 
 ## How to contribute
 
