@@ -8,10 +8,11 @@ module Morte.Lexer (
 
     -- * Types
     Token(..),
-    Position(..)
+    Position(..),
+    LocatedToken(..)
     ) where
 
-import Control.Monad.Trans.State.Strict (State)
+import Control.Monad.Trans.State.Strict (State, get)
 import Data.Bits (shiftR, (.&.))
 import Data.Char (digitToInt)
 import Data.Text.Lazy (Text)
@@ -20,7 +21,7 @@ import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
 import qualified Filesystem.Path.CurrentOS as Filesystem
 import Lens.Micro.Mtl ((.=), (+=))
-import Pipes (Producer, lift, yield)
+import Pipes (Producer, for, lift, yield)
 import Prelude hiding (FilePath)
 
 }
@@ -133,9 +134,13 @@ alexInputPrevChar = prevChar
     `lexExpr` keeps track of position and returns the remainder of the input if
     lexing fails.
 -}
-lexExpr :: Text -> Producer Token (State Position) (Maybe Text)
-lexExpr text = go (AlexInput '\n' [] text)
+lexExpr :: Text -> Producer LocatedToken (State Position) (Maybe Text)
+lexExpr text = for (go (AlexInput '\n' [] text)) tag
   where
+    tag token = do
+        pos <- lift get
+        yield (LocatedToken token pos)
+
     go input = case alexScan input 0 of
         AlexEOF                        -> return Nothing
         AlexError (AlexInput _ _ text) -> return (Just text)
@@ -146,6 +151,11 @@ lexExpr text = go (AlexInput '\n' [] text)
             act (Text.take (fromIntegral len) (currInput input))
             lift (column += len)
             go input'
+
+data LocatedToken = LocatedToken
+    { token    ::                !Token
+    , position :: {-# UNPACK #-} !Position
+    } deriving (Show)
 
 -- | Token type, used to communicate between the lexer and parser
 data Token
@@ -163,5 +173,5 @@ data Token
     | File FilePath
     | URL String
     | EOF
-    deriving (Show)
+    deriving (Eq, Show)
 }

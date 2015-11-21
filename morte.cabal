@@ -40,6 +40,7 @@ Library
         binary             >= 0.7.0.0  && < 0.8  ,
         containers         >= 0.5.0.0  && < 0.6  ,
         deepseq            >= 1.3.0    && < 1.5  ,
+        Earley             >= 0.9.0    && < 0.10 ,
         http-client        >= 0.4.0    && < 0.5  ,
         http-client-tls    >= 0.2.0    && < 0.3  ,
         microlens          >= 0.2.0.0  && < 0.4  ,
@@ -57,7 +58,7 @@ Library
         Morte.Lexer,
         Morte.Parser,
         Morte.Tutorial
-    Build-Tools: alex, happy
+    Build-Tools: alex
     GHC-Options: -O2
 
 Executable morte
