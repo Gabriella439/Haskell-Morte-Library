@@ -14,21 +14,45 @@ throws :: Exception e => Either e a -> IO a
 throws (Left  e) = throwIO e
 throws (Right r) = return r
 
-parser :: Parser String
-parser = strArgument
-    (   metavar "ADDRESS"
-    <>  help "An IPFS address pointing to a Morte expression"
-    )
+data Options = Options
+    { address :: String
+    , gateway :: String
+    , service :: String
+    }
+
+parser :: Parser Options
+parser =
+        Options
+    <$> strArgument
+        (   metavar "ADDRESS"
+        <>  help "An IPFS address pointing to a Morte expression"
+        )
+    <*> strOption
+        (   long "host"
+        <>  short 'h'
+        <>  metavar "HOST"
+        <>  help "The IPFS gateway server"
+        <>  value "ipfs.io"
+        <>  showDefaultWith id
+        )
+    <*> strOption
+        (   long "port"
+        <>  short 'p'
+        <>  metavar "PORT"
+        <>  help "Port or service to connect on"
+        <>  value "8080"
+        <>  showDefault
+        )
 
 main :: IO ()
 main = do
-    address <- execParser $ info (helper <*> parser)
+    Options address host port <- execParser $ info (helper <*> parser)
         (   fullDesc
         <>  header "morte-ipfs - Invoke `morte` on a given IPFS address"
         <>  progDesc "Type-check, normalize, and display a Morte program read \
                      \from an IPFS address."
         )
-    let expr = Embed (URL ("https://ipfs.io:8080/" ++ address))
+    let expr = Embed (URL ("http://" ++ host ++ ":" ++ port ++ "/" ++ address))
     expr'    <- load expr
     typeExpr <- throws (typeOf expr')
     Text.hPutStrLn stderr (pretty (normalize typeExpr))
