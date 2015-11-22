@@ -70,6 +70,15 @@ Executable morte
         optparse-applicative                < 0.13 ,
         text                 >= 0.11.1.0 && < 1.3
 
+Executable morte-ipfs
+    Hs-Source-Dirs: exec
+    Main-Is: Ipfs.hs
+    Build-Depends:
+        base                 >= 4        && < 5    ,
+        morte                                      ,
+        optparse-applicative                < 0.13 ,
+        text                 >= 0.11.1.0 && < 1.3
+
 Benchmark benchmarks
     Type:           exitcode-stdio-1.0
     HS-Source-Dirs: benchmarks
