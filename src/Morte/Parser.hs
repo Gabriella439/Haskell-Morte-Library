@@ -68,7 +68,7 @@ url = fmap unsafeFromURL (satisfy isURL)
 
     unsafeFromURL (LocatedToken (Lexer.URL n) _) = n
 
-expr :: Grammar r Token (Prod r Token LocatedToken (Expr Path))
+expr :: Grammar r (Prod r Token LocatedToken (Expr Path))
 expr = mdo
     expr <- rule
         (   bexpr
@@ -188,7 +188,7 @@ exprFromText text = evalState (runErrorT m) (Lexer.P 1 0)
                 pos <- lift get
                 throwError (ParseError pos (Lexing txt))
         let (parses, Report _ needed found) =
-                fullParses (parser expr locatedTokens)
+                fullParses (parser expr) locatedTokens
         case parses of
             parse:_ -> return parse
             []      -> do
