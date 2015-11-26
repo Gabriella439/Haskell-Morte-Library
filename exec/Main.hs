@@ -22,8 +22,8 @@ main = do
         <>  header "morte - A bare-bones calculus of constructions"
         <>  progDesc "Type-check and normalize a Morte program, reading the \
                      \program from standard input, writing the program's type \
-                     \to standard error, and writing the normalized program to\
-                     \standard output"
+                     \to standard error, and writing the normalized program to \
+                     \standard output."
         )
     inText   <- Text.getContents
     expr     <- throws (exprFromText inText)
