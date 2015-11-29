@@ -3,6 +3,7 @@ module Main where
 import Control.Exception (Exception, throwIO)
 import Data.Monoid (mempty)
 import qualified Data.Text.Lazy.IO as Text
+import Data.List (isInfixOf)
 import Morte.Core (Expr(..), Path(..), typeOf, pretty, normalize)
 import Options.Applicative hiding (Const)
 import System.IO (stderr)
@@ -25,14 +26,14 @@ parser =
         Options
     <$> strArgument
         (   metavar "ADDRESS"
-        <>  help "An IPFS address pointing to a Morte expression"
+        <>  help "An IPFS address or hash pointing to a Morte expression"
         )
     <*> strOption
         (   long "host"
         <>  short 'h'
         <>  metavar "HOST"
         <>  help "The IPFS gateway server"
-        <>  value "ipfs.io"
+        <>  value "gateway.ipfs.io"
         <>  showDefaultWith id
         )
     <*> strOption
@@ -50,9 +51,12 @@ main = do
         (   fullDesc
         <>  header "morte-ipfs - Invoke `morte` on a given IPFS address"
         <>  progDesc "Type-check, normalize, and display a Morte program read \
-                     \from an IPFS address."
+                     \from an IPFS address or hash."
         )
-    let expr = Embed (URL ("http://" ++ host ++ ":" ++ port ++ "/" ++ address))
+    let expr = if isInfixOf "/ipfs/" address 
+                then Embed (URL ("http://" ++ host ++ ":" ++ port ++ address))
+                else Embed (URL ("http://" ++ host ++ ":" ++ port ++ "/ipfs/" ++ address))
+    in
     expr'    <- load expr
     typeExpr <- throws (typeOf expr')
     Text.hPutStrLn stderr (pretty (normalize typeExpr))

@@ -55,6 +55,13 @@ further simplify Morte code, but this is not urgent and definitely a lower
 priority than implementing front-end and back-end compilers.  If implemented,
 this would be entirely backwards compatible.
 
+## IPFS
+
+There is a morte-[IPFS](https://ipfs.io) bridge being built at the 
+[´ipfs´](https://github.com/Gabriel439/Haskell-Morte-Library/tree/ipfs) branch.
+It is not yet fully tested but provides type-checking, normalizing,
+and displaying a Morte program read from an IPFS address or hash.
+
 ## Regenerating .travis.yml
 
 Using https://github.com/hvr/multi-ghc-travis
