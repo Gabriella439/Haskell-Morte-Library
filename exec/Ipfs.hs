@@ -53,9 +53,10 @@ main = do
         <>  progDesc "Type-check, normalize, and display a Morte program read \
                      \from an IPFS address or hash."
         )
-    if isInfixOf "/ipfs/" address 
-        then let expr = Embed (URL ("http://" ++ host ++ ":" ++ port ++ address))
-        else let expr = Embed (URL ("http://" ++ host ++ ":" ++ port ++ "/ipfs/" ++ address))
+    let expr = if isInfixOf "/ipfs/" address 
+                then Embed (URL ("http://" ++ host ++ ":" ++ port ++ address))
+                else Embed (URL ("http://" ++ host ++ ":" ++ port ++ "/ipfs/" ++ address))
+    in
     expr'    <- load expr
     typeExpr <- throws (typeOf expr')
     Text.hPutStrLn stderr (pretty (normalize typeExpr))
