@@ -14,7 +14,7 @@ module Morte.Lexer (
 
 import Control.Monad.Trans.State.Strict (State, get)
 import Data.Bits (shiftR, (.&.))
-import Data.Char (digitToInt)
+import Data.Char (digitToInt, ord)
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
