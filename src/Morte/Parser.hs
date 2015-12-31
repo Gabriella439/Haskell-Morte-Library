@@ -13,8 +13,8 @@ module Morte.Parser (
 
 import Control.Applicative hiding (Const)
 import Control.Exception (Exception)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Error (Error(..), throwError, runErrorT)
+import Control.Monad.Trans.Class  (lift)
+import Control.Monad.Trans.Except (Except, throwE, runExceptT)
 import Control.Monad.Trans.State.Strict (evalState, get)
 import Data.Monoid
 import Data.Text.Buildable (Buildable(..))
@@ -169,16 +169,9 @@ instance Buildable ParseError where
                 <>  "\n"
                 <>  "Error: Parsing failed\n"
 
-{- This is purely to satisfy the unnecessary `Error` constraint for `ErrorT`
-
-    I will switch to `ExceptT` when the Haskell Platform incorporates
-    `transformers-0.4.*`.
--}
-instance Error ParseError where
-
 -- | Parse an `Expr` from `Text` or return a `ParseError` if parsing fails
 exprFromText :: Text -> Either ParseError (Expr Path)
-exprFromText text = evalState (runErrorT m) (Lexer.P 1 0)
+exprFromText text = evalState (runExceptT m) (Lexer.P 1 0)
   where
     m = do
         (locatedTokens, mtxt) <- lift (Pipes.toListM' (Lexer.lexExpr text))
@@ -186,7 +179,7 @@ exprFromText text = evalState (runErrorT m) (Lexer.P 1 0)
             Nothing  -> return ()
             Just txt -> do
                 pos <- lift get
-                throwError (ParseError pos (Lexing txt))
+                throwE (ParseError pos (Lexing txt))
         let (parses, Report _ needed found) =
                 fullParses (parser expr) locatedTokens
         case parses of
@@ -195,4 +188,4 @@ exprFromText text = evalState (runErrorT m) (Lexer.P 1 0)
                 let LocatedToken t pos = case found of
                         lt:_ -> lt
                         _    -> LocatedToken Lexer.EOF (P 0 0)
-                throwError (ParseError pos (Parsing t needed))
+                throwE (ParseError pos (Parsing t needed))
