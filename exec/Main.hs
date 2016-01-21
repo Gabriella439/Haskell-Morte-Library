@@ -2,6 +2,7 @@ module Main where
 
 import Control.Exception (Exception, throwIO)
 import Data.Monoid (mempty)
+import Data.Traversable
 import qualified Data.Text.Lazy.IO as Text
 import Morte.Core (typeOf, pretty, normalize)
 import Morte.Parser (exprFromText)
