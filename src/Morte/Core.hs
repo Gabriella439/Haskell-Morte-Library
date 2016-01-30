@@ -49,7 +49,6 @@ module Morte.Core (
     Var(..),
     Const(..),
     Path(..),
-    X(..),
     Expr(..),
     Context,
 
@@ -88,6 +87,7 @@ import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
+import Data.Void (Void, absurd)
 import Filesystem.Path.CurrentOS (FilePath)
 import qualified Filesystem.Path.CurrentOS as Filesystem
 import Prelude hiding (FilePath)
@@ -209,27 +209,6 @@ instance Buildable Path where
         toText' = either id id . Filesystem.toText
     build (URL  str ) = "#" <> build str <> " "
 
-{-| Like `Data.Void.Void`, except with an `NFData` instance in order to avoid
-    orphan instances
--}
-newtype X = X { absurd :: forall a . a }
-
-instance Eq X where
-    _ == _ = True
-
-instance Show X where
-    show = absurd
-
-instance NFData X where
-    rnf x = seq x ()
-
-instance Buildable X where
-    build = absurd
-
-instance Binary X where
-    get = mzero
-    put = absurd
-
 -- | Syntax tree for expressions
 data Expr a
     -- | > Const c        ~  c
@@ -277,7 +256,7 @@ lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
                             | otherwise = Nothing
 lookupN _  []             _             = Nothing
 
-lookupCtx :: Var -> Context -> Maybe (Expr X)
+lookupCtx :: Var -> Context -> Maybe (Expr Void)
 lookupCtx (V x n) ctx = lookupN x ctx n
 
 match :: Text -> Int -> Text -> Int -> [(Text, Text)] -> Bool
@@ -404,15 +383,15 @@ instance Buildable a => Buildable (Expr a)
     refers to the @n@th occurrence of @x@ in the `Context` (using 0-based
     numbering).
 -}
-type Context = [(Text, Expr X)]
+type Context = [(Text, Expr Void)]
 
 -- | The specific type error
 data TypeMessage
     = UnboundVariable
-    | InvalidInputType (Expr X)
-    | InvalidOutputType (Expr X)
+    | InvalidInputType (Expr Void)
+    | InvalidOutputType (Expr Void)
     | NotAFunction
-    | TypeMismatch (Expr X) (Expr X)
+    | TypeMismatch (Expr Void) (Expr Void)
     | Untyped Const
     deriving (Show)
 
@@ -450,7 +429,7 @@ instance Buildable TypeMessage where
 -- | A structured type error that includes context
 data TypeError = TypeError
     { context     :: Context
-    , current     :: Expr X
+    , current     :: Expr Void
     , typeMessage :: TypeMessage
     } deriving (Typeable)
 
@@ -531,7 +510,7 @@ shift d x0 e0 = go e0 0
     is not necessary for just type-checking.  If you actually care about the
     returned type then you may want to `normalize` it afterwards.
 -}
-typeWith :: Context -> Expr X -> Either TypeError (Expr X)
+typeWith :: Context -> Expr Void -> Either TypeError (Expr Void)
 typeWith ctx e = case e of
     Const c     -> fmap Const (axiom c)
     Var x       -> case lookupCtx x ctx of
@@ -575,7 +554,7 @@ typeWith ctx e = case e of
     expression must be closed (i.e. no free variables), otherwise type-checking
     will fail.
 -}
-typeOf :: Expr X -> Either TypeError (Expr X)
+typeOf :: Expr Void -> Either TypeError (Expr Void)
 typeOf = typeWith []
 
 -- | Reduce an expression to weak-head normal form
