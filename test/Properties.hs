@@ -2,32 +2,37 @@ module Main (
     main
   ) where
 
-import Test.Tasty
-import Test.Tasty.QuickCheck as QuickCheck
-
+import ClosedWellTyped (ClosedWellTyped(..))
 import Morte.Core
-import ClosedWellTyped
+import Test.Tasty (TestTree)
+
+import qualified Test.Tasty            as Tasty
+import qualified Test.Tasty.QuickCheck as QuickCheck
 
 main :: IO ()
-main = defaultMain tests
+main = Tasty.defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Properties"
+tests = Tasty.testGroup "Properties"
     [ QuickCheck.testProperty "Normalization is idempotent"
-        normalizeIdempotent 
+        normalizationIsIdempotent 
     , QuickCheck.testProperty "Normalization preserves type safety"
-        wellTypedAfterNormalize
+        normalizationPreservesTypeSafety
     ]
 
-wellTypedAfterNormalize :: ClosedWellTyped -> Property
-wellTypedAfterNormalize (ClosedWellTyped expr) = 
-    isRight (typeOf expr) ==> isRight (typeOf (normalize expr))
+typeChecks :: Expr X -> Bool
+typeChecks expr = case typeOf expr of
+    Right _ -> True
+    Left  _ -> False
 
-normalizeIdempotent :: ClosedWellTyped -> Bool
-normalizeIdempotent (ClosedWellTyped expr) = normalize nExpr == nExpr
-  where
-    nExpr = normalize expr
+-- Carefully note that `ClosedWellTyped` generates well-typed expressions, so
+-- this is really testing that `typeChecks expr ==> typeChecks (normalize expr)`
+normalizationPreservesTypeSafety :: ClosedWellTyped -> Bool
+normalizationPreservesTypeSafety (ClosedWellTyped expr) =
+    typeChecks (normalize expr)
 
-isRight :: Either a b -> Bool
-isRight (Left  _) = False
-isRight (Right _) = True
+-- Carefully note that `(==)` also normalizes both sides before checking for
+-- α-equality, so this is really testing that `normalize (normalize expr)` and
+-- `normalize expr` are α-equivalent.
+normalizationIsIdempotent :: ClosedWellTyped -> Bool
+normalizationIsIdempotent (ClosedWellTyped expr) = normalize expr == expr

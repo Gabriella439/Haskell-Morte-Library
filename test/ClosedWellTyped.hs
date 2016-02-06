@@ -10,6 +10,7 @@ import Data.Text.Lazy (Text)
 import Control.Monad.State.Lazy (MonadState, StateT)
 import Control.Monad.Trans.Class (lift)
 import Morte.Core
+import Prelude hiding (pi)
 import Test.QuickCheck (Arbitrary, Gen)
 
 import qualified Control.Monad.State.Lazy as State
@@ -38,7 +39,7 @@ instance Arbitrary ClosedWellTyped
     arbitrary = QuickCheck.sized rndExpr
 
 rndExpr :: Int -> Gen ClosedWellTyped
-rndExpr n = fmap ClosedWellTyped (evalM genClosed (initEnv n))
+rndExpr n = fmap (ClosedWellTyped . fst) (evalM closed (initEnv n))
 
 initEnv :: Int -> Env
 initEnv n = Env
@@ -52,7 +53,7 @@ extend x t = State.modify (\env -> env { bindings = (x, t) : bindings env })
 select :: [(Int, M (Expr X, Expr X), Env -> Bool)] -> M (Expr X, Expr X)
 select wgps = do
     env <- State.get
-    m <- liftGen (QuickCheck.frequency (do
+    m   <- liftGen (QuickCheck.frequency (do
         (weight, generator, predicate) <- wgps
         guard (predicate env)
         return (weight, return generator) ))
@@ -62,12 +63,6 @@ scope :: M a -> M a
 scope f = do
     env <- State.get
     liftGen (evalM f env)
-
-buildPi :: Text -> Expr X -> Expr X -> Expr X -> (Expr X, Expr X)
-buildPi x _M _N _Nt = (Pi x _M _N, _Nt)
-
-buildLambda :: Text -> Expr X -> Expr X -> Expr X -> (Expr X, Expr X)
-buildLambda x _M _N _Nt = (Lam x _M _N, Pi x _M _Nt)
 
 matching :: Eq b => b -> [(a, b)] -> Bool
 matching t = any ((t ==) . snd)
@@ -79,92 +74,86 @@ piFilter :: Expr X -> Expr X -> Bool
 piFilter t (Pi _ _A _) = _A == t
 piFilter _  _          = False
 
--- TODO: Also generate `Pi` here?
-genClosed :: M (Expr X)
-genClosed =
-    fmap fst
-        (select
-            [ (20, genContext, \_ -> True          )
-            , (50, genLambda , moreThan 0 . uniques)
-            , (30, genApp    , moreThan 1 . uniques)
-            ] )
-
--- TODO: Also generate `Const` here?
-genObj :: M (Expr X, Expr X)
-genObj =
+closed :: M (Expr X, Expr X)
+closed =
     select
-        [ (5,  genObjPi , moreThan 0 . uniques )
-        , (50, genLambda, moreThan 0 . uniques )
-        , (25, genVar   , moreThan 0 . bindings)
-        , (20, genApp   ,
+        [ (20, typeOrKind                       , \_ -> True          )
+        , (50, lam (scope typeOrKind) termOrType, moreThan 0 . uniques)
+        , (30, app                              , moreThan 1 . uniques)
+        ]
+
+termOrType :: M (Expr X, Expr X)
+termOrType =
+    select
+        [ ( 5, type_                            , moreThan 0 . uniques )
+        , (50, lam (scope typeOrKind) termOrType, moreThan 0 . uniques )
+        , (25, var                              , moreThan 0 . bindings)
+        , (20, app                              ,
             \e  ->  (null       (bindings e) && moreThan 1 (uniques e))
                 ||  (moreThan 0 (bindings e) && moreThan 0 (uniques e)) )
         ]
 
-genContext :: M (Expr X, Expr X)
-genContext =
+typeOrKind :: M (Expr X, Expr X)
+typeOrKind =
     select
-        [ (15, return (Const Star,Const Box), \_ -> True                      )
-        , (20, genVarOf (Const Star)        , matching (Const Star) . bindings)
-        , (15, genPi                        , moreThan 0            . uniques )
+        [ (15, return (Const Star,Const Box)   , \_ -> True                      )
+        , (20, varWith (== Const Star)         , matching (Const Star) . bindings)
+        , (15, pi (scope typeOrKind) typeOrKind, moreThan 0            . uniques )
         ]
 
-genVar :: M (Expr X, Expr X)
-genVar = genVarWith (\_ -> True)
-
-genVarOf :: Expr X -> M (Expr X, Expr X)
-genVarOf t = genVarWith (t ==)
-
-genPiVarOf :: Expr X -> M (Expr X, Expr X)
-genPiVarOf t = genVarWith (piFilter t)
-
-genVarWith :: (Expr X -> Bool) -> M (Expr X, Expr X)
-genVarWith f = do
+varWith :: (Expr X -> Bool) -> M (Expr X, Expr X)
+varWith f = do
     bEnv <- State.gets bindings
     liftGen (QuickCheck.elements (do
         (x, y) <- bEnv
         guard (f y)
         return (Var x, y) ))
 
-genPi :: M (Expr X, Expr X)
-genPi = genAbsWith (scope genContext) genContext buildPi
+var :: M (Expr X, Expr X)
+var = varWith (\_ -> True)
 
-genObjPi :: M (Expr X, Expr X)
-genObjPi = genAbsWith (scope genContext) genBody buildPi
-  where
-    genBody =
-        select
-            [ (20, genVarOf (Const Star), matching (Const Star) . bindings)
-            , (15, genObjPi             , moreThan 0            . uniques)
-            ]
+type_ :: M (Expr X, Expr X)
+type_ =
+    select
+        [ (20, varWith (== Const Star)     , matching (Const Star) . bindings)
+        , (15, pi (scope typeOrKind) type_ , moreThan 0            . uniques )
+        ]
 
-genLambda :: M (Expr X, Expr X)
-genLambda = genAbsWith (scope genContext) genObj buildLambda
+fresh :: M Text
+fresh = do
+    env <- State.get
+    let x:xs = uniques env
+    State.put (env { uniques = xs })
+    return x
 
-genLambdaOf :: Expr X -> M (Expr X, Expr X)
-genLambdaOf _M = genAbsWith (return (_M, Const Star)) genObj buildLambda
-
-genAbsWith
-    :: M (Expr X, Expr X)
+lam :: M (Expr X, Expr X)
     -> M (Expr X, Expr X)
-    -> (Text -> Expr X -> Expr X -> Expr X -> (Expr X, Expr X))
     -> M (Expr X, Expr X)
-genAbsWith gT gB build = do
-    st <- State.get
-    let (x:xs) = uniques st
-    State.put (st { uniques = xs })
-    (_M, _) <- gT
-    extend (V x 0) _M
-    (_N, _Nt) <- gB
-    return (build x _M _N _Nt)
+lam _AGen bGen = do
+    x <- fresh
+    (_A, _) <- _AGen
+    extend (V x 0) _A
+    (b, bType) <- bGen
+    return (Lam x _A b, Pi x _A bType)
 
-genApp :: M (Expr X, Expr X)
-genApp = do
-    (_N, _A       ) <- scope genObj
+pi  :: M (Expr X, Expr X)
+    -> M (Expr X, Expr X)
+    -> M (Expr X, Expr X)
+pi _AGen _BGen = do
+    x <- fresh
+    (_A, _) <- _AGen
+    extend (V x 0) _A
+    (_B, _BType) <- _BGen
+    return (Pi x _A _B, _BType)
+
+app :: M (Expr X, Expr X)
+app = do
+    (_N, _A       ) <- scope termOrType
+    let genA = return (_A, Const Star)
     (f , Pi x _ _B) <- do
         scope
             (select
-                [ (40, genLambdaOf _A, moreThan 0              . uniques)
-                , (20, genPiVarOf  _A, any (piFilter _A . snd) . bindings)
+                [ (40, lam genA termOrType  , moreThan 0              . uniques )
+                , (20, varWith (piFilter _A), any (piFilter _A . snd) . bindings)
                 ] )
     return (App f _N, subst x 0 _N _B)
