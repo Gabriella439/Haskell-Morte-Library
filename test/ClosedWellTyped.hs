@@ -4,6 +4,7 @@ module ClosedWellTyped (
     ClosedWellTyped(..)
     ) where
 
+import Control.Applicative hiding (Const)
 import Control.Monad (guard)
 import Data.Text.Lazy (Text)
 import Control.Monad.State.Lazy (MonadState, StateT)
