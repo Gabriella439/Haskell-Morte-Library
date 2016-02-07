@@ -1,59 +1,43 @@
-module Main (main) where
+{-# LANGUAGE OverloadedStrings #-}
 
-import Morte.Core
-import Morte.Import (load)
-import Morte.Parser (ParseError, exprFromText)
+import Control.Exception (throwIO)
+import Criterion.Main (Benchmark, defaultMain, env, bgroup, bench, nf)
+import Filesystem.Path.CurrentOS (FilePath)
+import Morte.Core (Expr, X)
+import Paths_morte (getDataFileName)
+import Prelude hiding (FilePath)
 
-import Control.Monad     (foldM)
-import Criterion.Main    (Benchmark, defaultMain, env, bgroup, bench, nf)
-import Data.Text.Lazy    (Text)
-import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.IO (readFile, hPutStrLn)
-import GHC.IO.Handle.FD  (stderr)
-import Paths_morte       (getDataFileName)
-import Prelude hiding    (readFile)
+import qualified Data.Text.Lazy.IO         as Text
+import qualified Filesystem.Path.CurrentOS as Filesystem
+import qualified Morte.Core                as Morte
+import qualified Morte.Import              as Morte
+import qualified Morte.Parser              as Morte
 
-benchFilenames :: [String]
-benchFilenames = [
-      "recursive.mt"
-    , "factorial.mt"
-    ]
-
-readMtFile :: String -> IO (String, Text)
-readMtFile filename = do
-    path   <- getDataFileName filename
-    mtFile <- readFile path
-    return (filename, mtFile)
-
-partitionExpr
-    :: ([(String, ParseError)],[(String, Expr X)])
-    -> (String, Text)
-    -> IO ([(String, ParseError)],[(String, Expr X)])
-partitionExpr (pe, ps) (filename, contents) =
-    case exprFromText contents of
-        Left  perr -> return ((filename,perr):pe,ps)
-        Right expr -> do
-            expr' <- load expr
-            return (pe,(filename,expr'):ps)
-
-pprFileParseError :: (String, ParseError) -> Text
-pprFileParseError (fn,pe) = T.unlines [T.pack fn, pretty pe]
-
-srcEnv :: IO [(String, Expr X)]
-srcEnv = do
-    mtFiles <- mapM readMtFile benchFilenames
-    (pe,ps) <- foldM partitionExpr ([],[]) mtFiles
-    mapM_ (hPutStrLn stderr . pprFileParseError) pe
-    return ps
+readMorteFile :: FilePath -> IO (Expr X)
+readMorteFile filename = do
+    str <- getDataFileName (Filesystem.encodeString filename)
+    text <- Text.readFile str
+    case Morte.exprFromText text of
+        Left  e    -> throwIO e
+        Right expr -> Morte.load expr
 
 main :: IO ()
-main = defaultMain [
-      env srcEnv $ bgroup "source" . map benchExpr
+main = defaultMain
+    [ env srcEnv (\ ~(x0, x1) ->
+        bgroup "source"
+            [ benchExpr "recursive.mt" x0
+            , benchExpr "factorial.mt" x1
+            ] )
     ]
+  where
+    srcEnv = do
+        x0 <- readMorteFile "recursive.mt"
+        x1 <- readMorteFile "factorial.mt"
+        return (x0, x1)
 
-benchExpr :: (String, Expr X) -> Benchmark
-benchExpr (tag,expr) = bgroup tag [
-      bench "normalize" $ nf normalize expr
-    , bench "equality"  $ nf (expr ==) expr
-    , bench "typeOf"    $ nf typeOf    expr
+benchExpr :: FilePath -> Expr X -> Benchmark
+benchExpr path expr = bgroup (Filesystem.encodeString path)
+    [ bench "normalize" (nf Morte.normalize expr)
+    , bench "equality"  (nf (expr ==)       expr)
+    , bench "typeOf"    (nf Morte.typeOf    expr)
     ]
