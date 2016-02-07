@@ -9,8 +9,8 @@ import Control.Exception (throwIO)
 import ClosedWellTyped (ClosedWellTyped(..))
 import Data.Text.Lazy (Text)
 import Morte.Core (Expr, X)
-import NeatInterpolation (text)
 import Test.Tasty (TestTree)
+import Text.RawString.QQ (r)
 
 import qualified Data.Text.Lazy        as Text
 import qualified Morte.Core            as Morte
@@ -97,7 +97,7 @@ example0 =
 example1 :: IO ()
 example1 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- id.mt
 
 -- Morte accepts comments
@@ -112,7 +112,7 @@ example1 =
 example2 :: IO ()
 example2 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- id2.mt
 
 (   \(id : forall (a : *) -> a -> a)
@@ -128,7 +128,7 @@ example2 =
 example3 :: IO ()
 example3 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- bool.mt
 
 -- let data Bool = True | False
@@ -163,7 +163,7 @@ example3 =
 example4 :: IO ()
 example4 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- pair.mt
 
 -- let Pair a b = P a b
@@ -210,7 +210,7 @@ example4 =
 example5 :: IO ()
 example5 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- all.mt
 
 -- let data Bool = True | False
@@ -297,7 +297,7 @@ example5 =
 example6 :: IO ()
 example6 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- mapid1.mt
 
 (    \(List : * -> *)
@@ -329,7 +329,7 @@ example6 =
 example7 :: IO ()
 example7 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- mapid2.mt
 
 (    \(List : * -> *)
@@ -361,7 +361,7 @@ example7 =
 example8 :: IO ()
 example8 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- mapcomp1.mt
 
 -- map (f . g)
@@ -414,7 +414,7 @@ example8 =
 example9 :: IO ()
 example9 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- mapcomp2.mt
 
 (   \(List : * -> *)
@@ -465,7 +465,7 @@ example9 =
 example10 :: IO ()
 example10 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- corecursive.mt
 
 -- first :: (a -> b) -> (a, c) -> (b, c)
@@ -650,7 +650,7 @@ example10 =
 example11 :: IO ()
 example11 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- corecursive.mt
 
 -- first :: (a -> b) -> (a, c) -> (b, c)
@@ -835,7 +835,7 @@ example11 =
 example12 :: IO ()
 example12 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- corecursive.mt
 
 -- first :: (a -> b) -> (a, c) -> (b, c)
@@ -1020,7 +1020,7 @@ example12 =
 example13 :: IO ()
 example13 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- corecursive.mt
 
 -- first :: (a -> b) -> (a, c) -> (b, c)
@@ -1205,7 +1205,7 @@ example13 =
 example14 :: IO ()
 example14 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- recursive.mt
 
 -- The Haskell code we will translate to Morte:
@@ -1485,7 +1485,7 @@ example14 =
 example15 :: IO ()
 example15 =
     example
-        (Text.fromStrict [text|
+        (Text.pack [r|
 -- corecursive.mt
 
 -- data IOF r s = PutStrLn String s | GetLine (String -> s) | Return r

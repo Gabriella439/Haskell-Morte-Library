@@ -1,6 +1,4 @@
 flags: {}
 packages:
 - '.'
-extra-deps:
-- neat-interpolation-0.3
-resolver: nightly-2015-11-22
+resolver: lts-5.1
