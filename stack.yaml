@@ -1,5 +1,6 @@
 flags: {}
 packages:
 - '.'
-extra-deps: []
+extra-deps:
+- neat-interpolation-0.3
 resolver: nightly-2015-11-22

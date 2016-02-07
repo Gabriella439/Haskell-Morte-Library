@@ -108,7 +108,7 @@ import Morte.Import (ReferentiallyOpaque)
 > id :: a -> a
 >
 > -- Morte
-> ∀(a : *) → a → a
+> ∀(a : *) → ∀(x : a) → a
 
     The first thing you'll notice is that Morte explicitly quantifies all types.
     In Haskell, you can do this, too, using the @ExplicitForAll@ extension:
@@ -165,7 +165,7 @@ import Morte.Import (ReferentiallyOpaque)
     Then we'll type-check and optimize this program:
 
 > $ morte < id.mt
-> ∀(String : *) → String → String
+> ∀(String : *) → ∀(x : String) → String
 > 
 > λ(String : *) → λ(x : String) → x
 
@@ -518,7 +518,7 @@ import Morte.Import (ReferentiallyOpaque)
    If you type-check and optimize this, you get:
 
 > $ morte < bool.mt
-> ∀(Int : *) → Int → Int → Int
+> ∀(Int : *) → ∀(Zero : Int) → ∀(One : Int) → Int
 > 
 > λ(Int : *) → λ(Zero : Int) → λ(One : Int) → One
 
@@ -616,7 +616,7 @@ import Morte.Import (ReferentiallyOpaque)
     If you compile and type-check that you get:
 
 > $ morte < pair.mt
-> ∀(a : *) → a → a → a
+> ∀(a : *) → ∀(x : a) → ∀(y : a) → a
 > 
 > λ(a : *) → λ(x : a) → λ(y : a) → y
 
@@ -1259,8 +1259,8 @@ import Morte.Import (ReferentiallyOpaque)
     over the list just once, applying @\'f\'@ and @\'g\'@ to every value:
 
 > $ morte < mapcomp1.mt
-> ∀(a : *) → ∀(b : *) → ∀(c : *) → (b → c) → (a → b) → (∀(x : *) → (a → x → x) →
->  x → x) → ∀(x : *) → (c → x → x) → x → x
+> ∀(a : *) → ∀(b : *) → ∀(c : *) → ∀(f : b → c) → ∀(g : a → b) → (∀(x : *) → (a 
+> → x → x) → x → x) → ∀(x : *) → (c → x → x) → x → x
 > 
 > λ(a : *) → λ(b : *) → λ(c : *) → λ(f : b → c) → λ(g : a → b) → λ(l : ∀(x : *) 
 > → (a → x → x) → x → x) → λ(x : *) → λ(Cons : c → x → x) → l x (λ(va : a) → Con
@@ -1798,8 +1798,8 @@ unrolled syntax tree representing a program that echoes 99 lines from standard
 input to standard output:
 
 > $ morte < recursive.mt
-> ∀(String : *) → ∀(U : *) → U → ∀(x : *) → (String → x → x) → ((String → x
-> ) → x) → (U → x) → x
+> ∀(String : *) → ∀(U : *) → ∀(Unit : U) → ∀(x : *) → (String → x → x) → ((Strin
+> g → x) → x) → (U → x) → x
 > 
 > λ(String : *) → λ(U : *) → λ(Unit : U) → λ(x : *) → λ(PutStrLn : String → x → 
 > x) → λ(GetLine : (String → x) → x) → λ(Return : U → x) → GetLine (λ(va : Strin
