@@ -31,8 +31,8 @@ main = defaultMain
     ]
   where
     srcEnv = do
-        x0 <- readMorteFile "recursive.mt"
-        x1 <- readMorteFile "factorial.mt"
+        x0 <- readMorteFile "bench/src/recursive.mt"
+        x1 <- readMorteFile "bench/src/factorial.mt"
         return (x0, x1)
 
 benchExpr :: FilePath -> Expr X -> Benchmark
