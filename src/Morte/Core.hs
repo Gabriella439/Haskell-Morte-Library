@@ -1,9 +1,10 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveFunctor      #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveFoldable             #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| This module contains the core calculus for the Morte language.  This
@@ -77,8 +78,10 @@ import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
-import Data.Foldable (Foldable(..))
-import Data.Traversable (Traversable(..))
+import Data.Foldable (Foldable(..), toList)
+import Data.Hashable (Hashable)
+import Data.HashMap.Strict (HashMap)
+import Data.Sequence (Seq)
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
@@ -86,11 +89,15 @@ import Data.Text.Lazy (Text, unpack)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Builder as Builder
+import Data.Traversable (Traversable(..))
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
 import qualified Filesystem.Path.CurrentOS as Filesystem
 import Prelude hiding (FilePath)
+
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Sequence       as Seq
 
 {-| Label for a bound variable
 
@@ -189,7 +196,7 @@ instance Buildable Const where
 
 axiom :: Const -> Either TypeError Const
 axiom Star = return Box
-axiom Box  = Left (TypeError [] (Const Box) (Untyped Box))
+axiom Box  = Left (TypeError emptyContext (Const Box) (Untyped Box))
 
 rule :: Const -> Const -> Either TypeError Const
 rule Star Box  = return Box
@@ -269,16 +276,6 @@ instance Monad Expr where
         Pi  x _A _B -> Pi  x (_A >>= k) (_B >>= k)
         App f a     -> App (f >>= k) (a >>= k)
         Embed r     -> k r
-
-lookupN :: Eq a => a -> [(a, b)] -> Int -> Maybe b
-lookupN a ((a', b'):abs') n | a /= a'   = lookupN a abs'    n
-                            | n >  0    = lookupN a abs' $! n - 1
-                            | n == 0    = Just b'
-                            | otherwise = Nothing
-lookupN _  []             _             = Nothing
-
-lookupCtx :: Var -> Context -> Maybe (Expr X)
-lookupCtx (V x n) ctx = lookupN x ctx n
 
 match :: Text -> Int -> Text -> Int -> [(Text, Text)] -> Bool
 match xL nL xR nR  []                                      = xL == xR && nL == nR
@@ -404,7 +401,23 @@ instance Buildable a => Buildable (Expr a)
     refers to the @n@th occurrence of @x@ in the `Context` (using 0-based
     numbering).
 -}
-type Context = [(Text, Expr X)]
+newtype Context = Context { getContext :: HashMap Text (Seq (Expr X)) }
+    deriving (NFData, Show)
+
+emptyContext :: Context
+emptyContext = Context HashMap.empty
+
+lookupContext :: Var -> Context -> Maybe (Expr X)
+lookupContext (V x n) ctx = do
+    val <- HashMap.lookup x (getContext ctx)
+    return (Seq.index val n)
+
+insertContext :: Text -> Expr X -> Context -> Context
+insertContext x expr =
+    Context . HashMap.insertWith (<>) x (Seq.singleton expr) . getContext
+
+mapContext :: (Expr X -> Expr X) -> Context -> Context
+mapContext f = Context . fmap (fmap f) . getContext
 
 -- | The specific type error
 data TypeMessage
@@ -480,6 +493,9 @@ instance Buildable TypeError where
             .   Text.unlines
             .   map (Builder.toLazyText . buildKV)
             .   reverse
+            .   concatMap (\(k, vs) -> map (\v -> (k, v)) (toList vs))
+            .   HashMap.toList
+            .   getContext
 
 {-| Substitute all occurrences of a variable with an expression
 
@@ -534,11 +550,11 @@ shift d x0 e0 = go e0 0
 typeWith :: Context -> Expr X -> Either TypeError (Expr X)
 typeWith ctx e = case e of
     Const c     -> fmap Const (axiom c)
-    Var x       -> case lookupCtx x ctx of
+    Var x       -> case lookupContext x ctx of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b  -> do
-        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, _A):ctx ]
+        let ctx' = mapContext (shift 1 x) (insertContext x _A ctx)
         _B <- typeWith ctx' b
         let p = Pi x _A _B
         _t <- typeWith ctx p
@@ -548,7 +564,7 @@ typeWith ctx e = case e of
         s  <- case eS of
             Const s -> return s
             _       -> Left (TypeError ctx e (InvalidInputType _A))
-        let ctx' = [ (x', shift 1 x _A') | (x', _A') <- (x, _A):ctx ]
+        let ctx' = mapContext (shift 1 x) (insertContext x _A ctx)
         eT <- fmap whnf (typeWith ctx' _B)
         t  <- case eT of
             Const t -> return t
@@ -576,7 +592,7 @@ typeWith ctx e = case e of
     will fail.
 -}
 typeOf :: Expr X -> Either TypeError (Expr X)
-typeOf = typeWith []
+typeOf = typeWith emptyContext
 
 -- | Reduce an expression to weak-head normal form
 whnf :: Expr a -> Expr a

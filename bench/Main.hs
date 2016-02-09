@@ -23,17 +23,19 @@ readMorteFile filename = do
 
 main :: IO ()
 main = defaultMain
-    [ env srcEnv (\ ~(x0, x1) ->
+    [ env srcEnv (\ ~(x0, x1, x2) ->
         bgroup "source"
             [ benchExpr "recursive.mt" x0
             , benchExpr "factorial.mt" x1
+            , benchExpr "concat.mt" x2
             ] )
     ]
   where
     srcEnv = do
         x0 <- readMorteFile "bench/src/recursive.mt"
         x1 <- readMorteFile "bench/src/factorial.mt"
-        return (x0, x1)
+        x2 <- readMorteFile "bench/src/concat.mt"
+        return (x0, x1, x2)
 
 benchExpr :: FilePath -> Expr X -> Benchmark
 benchExpr path expr = bgroup (Filesystem.encodeString path)
