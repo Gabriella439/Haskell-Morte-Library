@@ -54,6 +54,7 @@ Library
         transformers         >= 0.2.0.0  && < 0.6 ,
         unordered-containers                < 0.3
     Exposed-Modules:
+        Morte.Context,
         Morte.Core,
         Morte.Import,
         Morte.Lexer,

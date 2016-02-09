@@ -78,10 +78,7 @@ import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (getWord64le)
 import Data.Binary.Put (putWord64le)
-import Data.Foldable (Foldable(..), toList)
-import Data.Hashable (Hashable)
-import Data.HashMap.Strict (HashMap)
-import Data.Sequence (Seq)
+import Data.Foldable (Foldable(..))
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
@@ -94,10 +91,10 @@ import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
 import qualified Filesystem.Path.CurrentOS as Filesystem
+import Morte.Context (Context)
 import Prelude hiding (FilePath)
 
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Sequence       as Seq
+import qualified Morte.Context as Context
 
 {-| Label for a bound variable
 
@@ -196,7 +193,7 @@ instance Buildable Const where
 
 axiom :: Const -> Either TypeError Const
 axiom Star = return Box
-axiom Box  = Left (TypeError emptyContext (Const Box) (Untyped Box))
+axiom Box  = Left (TypeError Context.empty (Const Box) (Untyped Box))
 
 rule :: Const -> Const -> Either TypeError Const
 rule Star Box  = return Box
@@ -395,30 +392,6 @@ instance Buildable a => Buildable (Expr a)
                 <>  (if parenApp then ")" else "")
             Embed p    -> build p
 
-{-| Bound variable names and their types
-
-    Variable names may appear more than once in the `Context`.  The `Var` @x\@n@
-    refers to the @n@th occurrence of @x@ in the `Context` (using 0-based
-    numbering).
--}
-newtype Context = Context { getContext :: HashMap Text (Seq (Expr X)) }
-    deriving (NFData, Show)
-
-emptyContext :: Context
-emptyContext = Context HashMap.empty
-
-lookupContext :: Var -> Context -> Maybe (Expr X)
-lookupContext (V x n) ctx = do
-    val <- HashMap.lookup x (getContext ctx)
-    return (Seq.index val n)
-
-insertContext :: Text -> Expr X -> Context -> Context
-insertContext x expr =
-    Context . HashMap.insertWith (<>) x (Seq.singleton expr) . getContext
-
-mapContext :: (Expr X -> Expr X) -> Context -> Context
-mapContext f = Context . fmap (fmap f) . getContext
-
 -- | The specific type error
 data TypeMessage
     = UnboundVariable
@@ -462,7 +435,7 @@ instance Buildable TypeMessage where
 
 -- | A structured type error that includes context
 data TypeError = TypeError
-    { context     :: Context
+    { context     :: Context (Expr X)
     , current     :: Expr X
     , typeMessage :: TypeMessage
     } deriving (Typeable)
@@ -493,9 +466,7 @@ instance Buildable TypeError where
             .   Text.unlines
             .   map (Builder.toLazyText . buildKV)
             .   reverse
-            .   concatMap (\(k, vs) -> map (\v -> (k, v)) (toList vs))
-            .   HashMap.toList
-            .   getContext
+            .   Context.toList
 
 {-| Substitute all occurrences of a variable with an expression
 
@@ -547,14 +518,14 @@ shift d x0 e0 = go e0 0
     is not necessary for just type-checking.  If you actually care about the
     returned type then you may want to `normalize` it afterwards.
 -}
-typeWith :: Context -> Expr X -> Either TypeError (Expr X)
+typeWith :: Context (Expr X) -> Expr X -> Either TypeError (Expr X)
 typeWith ctx e = case e of
     Const c     -> fmap Const (axiom c)
-    Var x       -> case lookupContext x ctx of
+    Var (V x n) -> case Context.lookup x n ctx of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b  -> do
-        let ctx' = mapContext (shift 1 x) (insertContext x _A ctx)
+        let ctx' = fmap (shift 1 x) (Context.insert x _A ctx)
         _B <- typeWith ctx' b
         let p = Pi x _A _B
         _t <- typeWith ctx p
@@ -564,7 +535,7 @@ typeWith ctx e = case e of
         s  <- case eS of
             Const s -> return s
             _       -> Left (TypeError ctx e (InvalidInputType _A))
-        let ctx' = mapContext (shift 1 x) (insertContext x _A ctx)
+        let ctx' = fmap (shift 1 x) (Context.insert x _A ctx)
         eT <- fmap whnf (typeWith ctx' _B)
         t  <- case eT of
             Const t -> return t
@@ -592,7 +563,7 @@ typeWith ctx e = case e of
     will fail.
 -}
 typeOf :: Expr X -> Either TypeError (Expr X)
-typeOf = typeWith emptyContext
+typeOf = typeWith Context.empty
 
 -- | Reduce an expression to weak-head normal form
 whnf :: Expr a -> Expr a
