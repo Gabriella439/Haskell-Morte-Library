@@ -2,6 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecursiveDo       #-}
 
+-- | Parsing logic for the Morte language
+
 module Morte.Parser (
     -- * Parser
     exprFromText,

@@ -152,6 +152,7 @@ lexExpr text = for (go (AlexInput '\n' [] text)) tag
             lift (column += len)
             go input'
 
+-- | A `Token` augmented with `Position` information
 data LocatedToken = LocatedToken
     { token    ::                !Token
     , position :: {-# UNPACK #-} !Position
