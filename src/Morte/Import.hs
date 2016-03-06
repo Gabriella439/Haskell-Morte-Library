@@ -267,24 +267,36 @@ loadStatic path = do
 
     let paths' = path:paths
     zoom stack (put paths')
-    expr <- if path `elem` paths
+    (expr, cached) <- if path `elem` paths
         then liftIO (throwIO (Imported paths (Cycle path)))
         else do
             m <- zoom cache get
             case Map.lookup path m of
-                Just expr -> return expr
+                Just expr -> return (expr, True)
                 Nothing   -> do
-                    expr' <- loadDynamic path
-                    case traverse (\_ -> Nothing) expr' of
+                    expr'  <- loadDynamic path
+                    expr'' <- case traverse (\_ -> Nothing) expr' of
                         -- No imports left
                         Just expr -> do
                             zoom cache (put $! Map.insert path expr m)
                             return expr
                         -- Some imports left, so recurse
                         Nothing   -> fmap join (traverse loadStatic expr')
-    case typeOf expr of
-        Left  err -> liftIO (throwIO (Imported paths' err))
-        Right _   -> return ()
+                    return (expr'', False)
+
+    -- Type-check expressions here for two separate reasons:
+    --
+    -- * to verify that they are closed
+    -- * to catch type errors as early in the import process as possible
+    --
+    -- There is no need to check expressions that have been cached, since they
+    -- have already been checked
+    if cached
+        then return ()
+        else case typeOf expr of
+            Left  err -> liftIO (throwIO (Imported paths' err))
+            Right _   -> return ()
+
     zoom stack (put paths)
 
     return expr
