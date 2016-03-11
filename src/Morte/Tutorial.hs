@@ -93,7 +93,7 @@ import Morte.Import (ReferentiallyOpaque)
 > $ morte
 > \(a : *) -> \(x : a) -> x <Enter>
 > <Ctrl-D>
-> ∀(a : *) → a → a
+> ∀(a : *) → ∀(x : a) → a
 > 
 > λ(a : *) → λ(x : a) → x
 > $
