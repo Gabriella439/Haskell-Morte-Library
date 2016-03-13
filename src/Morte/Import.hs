@@ -286,8 +286,8 @@ loadStatic path = do
 
     -- Type-check expressions here for two separate reasons:
     --
-    -- * to verify that they are closed
-    -- * to catch type errors as early in the import process as possible
+    --  * to verify that they are closed
+    --  * to catch type errors as early in the import process as possible
     --
     -- There is no need to check expressions that have been cached, since they
     -- have already been checked
