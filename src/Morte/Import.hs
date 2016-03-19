@@ -74,7 +74,6 @@ module Morte.Import (
 import Control.Exception (Exception, IOException, catch, onException, throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Monad.Managed (Managed, managed, with)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
 import Data.Map.Strict (Map)
@@ -179,7 +178,7 @@ cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 manager :: Lens' Status (Maybe Manager)
 manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
 
-needManager :: StateT Status Managed Manager
+needManager :: StateT Status IO Manager
 needManager = do
     x <- zoom manager get
     case x of
@@ -187,12 +186,12 @@ needManager = do
         Nothing -> do
             let settings = HTTP.tlsManagerSettings
                     { HTTP.managerResponseTimeout = Just 1000000 }  -- 1 second
-            m <- lift (managed (HTTP.withManager settings))
+            m <- liftIO (HTTP.newManager settings)
             zoom manager (put (Just m))
             return m
 
 -- | Load a `Path` as a \"dynamic\" expression (without resolving any imports)
-loadDynamic :: Path -> StateT Status Managed (Expr Path)
+loadDynamic :: Path -> StateT Status IO (Expr Path)
 loadDynamic p = do
     paths <- zoom stack get
     txt <- case p of
@@ -247,7 +246,7 @@ loadDynamic p = do
         Right expr -> return expr 
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
-loadStatic :: Path -> StateT Status Managed (Expr X)
+loadStatic :: Path -> StateT Status IO (Expr X)
 loadStatic path = do
     paths <- zoom stack get
 
@@ -303,7 +302,6 @@ loadStatic path = do
 
 -- | Resolve all imports within an expression
 load :: Expr Path -> IO (Expr X)
-load expr =
-    with (evalStateT (fmap join (traverse loadStatic expr)) status) return
+load expr = evalStateT (fmap join (traverse loadStatic expr)) status
   where
     status = Status [] Map.empty Nothing
