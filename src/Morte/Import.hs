@@ -74,7 +74,6 @@ module Morte.Import (
 import Control.Exception (Exception, IOException, catch, onException, throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
