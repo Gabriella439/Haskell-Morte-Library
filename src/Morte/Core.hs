@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveFoldable             #-}
@@ -92,7 +93,7 @@ import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
 import qualified Filesystem.Path.CurrentOS as Filesystem
 import Morte.Context (Context)
-import Prelude hiding (FilePath)
+import Prelude hiding (FilePath, lookup, succ)
 
 import qualified Morte.Context as Context
 
@@ -248,6 +249,14 @@ data Expr a
     | Pi  Text (Expr a) (Expr a)
     -- | > App f a        ~  f a
     | App (Expr a) (Expr a)
+    -- | > NatLit n       ~  n
+    | NatLit Int
+    -- | > Nat            ~  Nat
+    | Nat
+    -- | > FromNat        ~  fromNat
+    | FromNat
+    -- | > ToNat          ~  toNat
+    | ToNat
     -- | > Embed path     ~  #path
     | Embed a
     deriving (Functor, Foldable, Traversable, Show)
@@ -261,6 +270,10 @@ instance Applicative Expr where
         Lam x _A  b -> Lam x (_A <*> mx) ( b <*> mx)
         Pi  x _A _B -> Pi  x (_A <*> mx) (_B <*> mx)
         App f a     -> App (f <*> mx) (a <*> mx)
+        NatLit n    -> NatLit n
+        Nat         -> Nat
+        FromNat     -> FromNat
+        ToNat       -> ToNat 
         Embed f     -> fmap f mx
 
 instance Monad Expr where
@@ -272,6 +285,10 @@ instance Monad Expr where
         Lam x _A  b -> Lam x (_A >>= k) ( b >>= k)
         Pi  x _A _B -> Pi  x (_A >>= k) (_B >>= k)
         App f a     -> App (f >>= k) (a >>= k)
+        NatLit n    -> NatLit n
+        Nat         -> Nat
+        FromNat     -> FromNat
+        ToNat       -> ToNat
         Embed r     -> k r
 
 match :: Text -> Int -> Text -> Int -> [(Text, Text)] -> Bool
@@ -308,6 +325,10 @@ instance Eq a => Eq (Expr a) where
             b1 <- go fL fR
             b2 <- go aL aR
             return (b1 && b2)
+        go (NatLit nL) (NatLit nR) = return (nL == nR)
+        go  Nat         Nat        = return True
+        go  FromNat     FromNat    = return True
+        go  ToNat       ToNat      = return True
         go (Embed pL) (Embed pR) = return (pL == pR)
         go _ _ = return False
 
@@ -336,6 +357,15 @@ instance Binary a => Binary (Expr a) where
         Embed p     -> do
             put (5 :: Word8)
             put p
+        NatLit n    -> do
+            put (6 :: Word8)
+            put n
+        Nat         -> do
+            put (7 :: Word8)
+        FromNat     -> do
+            put (8 :: Word8)
+        ToNat       -> do
+            put (9 :: Word8)
 
     get = do
         n <- get :: Get Word8
@@ -346,6 +376,10 @@ instance Binary a => Binary (Expr a) where
             3 -> Pi  <$> getUtf8 <*> get <*> get
             4 -> App <$> get <*> get
             5 -> Embed <$> get
+            6 -> NatLit <$> get
+            7 -> pure Nat
+            8 -> pure FromNat
+            9 -> pure ToNat
             _ -> fail "get Expr: Invalid tag byte"
 
 instance IsString (Expr a)
@@ -359,6 +393,10 @@ instance NFData a => NFData (Expr a) where
         Lam x _A b  -> rnf x `seq` rnf _A `seq` rnf b
         Pi  x _A _B -> rnf x `seq` rnf _A `seq` rnf _B
         App f a     -> rnf f `seq` rnf a
+        NatLit n    -> rnf n
+        Nat         -> ()
+        FromNat     -> ()
+        ToNat       -> ()
         Embed p     -> rnf p
 
 -- | Generates a syntactically valid Morte program
@@ -390,6 +428,10 @@ instance Buildable a => Buildable (Expr a)
                     (if parenApp then "(" else "")
                 <>  go True False f <> " " <> go True True a
                 <>  (if parenApp then ")" else "")
+            NatLit n   -> build n
+            Nat        -> "Natural"
+            FromNat    -> "fromNat"
+            ToNat      -> "toNat"
             Embed p    -> build p
 
 -- | The specific type error
@@ -485,6 +527,10 @@ subst x n e' e = case e of
     App f a       -> App (subst x n e' f) (subst x n e' a)
     Var (V x' n') -> if x == x' && n == n' then e' else e
     Const k       -> Const k
+    NatLit m      -> NatLit m
+    Nat           -> Nat
+    FromNat       -> FromNat
+    ToNat         -> ToNat
     -- The Morte compiler enforces that all embedded values
     -- are closed expressions
     Embed p       -> Embed p
@@ -507,6 +553,10 @@ shift d x0 e0 = go e0 0
           where
             n' = if x == x0 && n >= c then n + d else n
         Const k     -> Const k
+        NatLit n    -> NatLit n
+        Nat         -> Nat
+        FromNat     -> FromNat
+        ToNat       -> ToNat
         -- The Morte compiler enforces that all embedded values
         -- are closed expressions
         Embed p     -> Embed p
@@ -556,6 +606,10 @@ typeWith ctx e = case e of
                 let nf_A  = normalize _A
                     nf_A' = normalize _A'
                 Left (TypeError ctx e (TypeMismatch nf_A nf_A'))
+    NatLit _    -> return Nat
+    Nat         -> return (Const Star)
+    FromNat     -> return (Pi "_" Nat     natType)
+    ToNat       -> return (Pi "_" natType Nat    )
     Embed p     -> absurd p
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
@@ -592,6 +646,10 @@ freeIn v@(V x n) = go
         Var v'      -> v == v'
         App f a     -> go f || go a
         Const _     -> False
+        NatLit _    -> False
+        Nat         -> False
+        FromNat     -> False
+        ToNat       -> False
         -- The Morte compiler enforces that all embedded values
         -- are closed expressions
         Embed _     -> False
@@ -624,10 +682,87 @@ normalize e = case e of
           where
             a' = shift 1 x (normalize a)
             b' = subst x 0 a' b
+        FromNat    -> case a of
+            NatLit n -> case fromNat n of
+                Just e1 -> normalize e1
+                Nothing -> App FromNat (normalize a)
+            _        -> App FromNat (normalize a)
+        ToNat      -> case toNat a' of
+            Just n  -> NatLit n
+            Nothing -> App ToNat a'
+          where
+            a' = normalize a
         f'         -> App f' (normalize a)
     Var   _    -> e
     Const _    -> e
+    NatLit _   -> e
+    Nat        -> e
+    FromNat    -> FromNat
+    ToNat      -> ToNat
     Embed p    -> Embed p
+
+data NatCtx = NatCtxNat | NatCtxSucc | NatCtxZero deriving (Eq)
+
+-- | Type of a church-encoded number
+natType :: Expr a
+natType =
+    Pi "Nat" (Const Star)
+        (Pi "Succ" (Pi "pred" "Nat" "Nat") (Pi "Zero" "Nat" "Nat"))
+
+-- | Convert a church-encoded number back into a numeric literal
+toNat :: Expr a -> Maybe Int
+toNat
+    (Lam nat0 (Const Star)
+        (Lam succ0 (Pi _ nat1 nat2)
+            (Lam zero0 nat3 e0) ) )
+    | lookup nat1 c1 == Just NatCtxNat &&
+      lookup nat2 c1 == Just NatCtxNat &&
+      lookup nat3 c2 == Just NatCtxNat = go e0 0
+    | otherwise                        = Nothing
+  where
+    c0 = Context.empty
+    c1 = Context.insert nat0  NatCtxNat  c0
+    c2 = Context.insert succ0 NatCtxSucc c1
+    c3 = Context.insert zero0 NatCtxZero c2
+
+    lookup k c = case normalize k of
+        Var (V x n) -> Context.lookup x n c
+        _           -> Nothing
+
+    go (App succ e) !m
+        | lookup succ c3 == Just NatCtxSucc = go e (m + 1)
+        | otherwise                         = Nothing
+    go  zero        !m
+        | lookup zero c3 == Just NatCtxZero = Just m
+        | otherwise                         = Nothing
+toNat (Lam nat0 (Const Star) (Lam succ0 (Pi _ nat1 nat2) succ1))
+    | lookup nat1  c1 == Just NatCtxNat  &&
+      lookup nat2  c1 == Just NatCtxNat  &&
+      lookup succ1 c2 == Just NatCtxSucc = Just 1
+    | otherwise                          = Nothing
+  where
+    c0 = Context.empty
+    c1 = Context.insert nat0  NatCtxNat  c0
+    c2 = Context.insert succ0 NatCtxSucc c1
+
+    lookup k c = case normalize k of
+        Var (V x n) -> Context.lookup x n c
+        _           -> Nothing
+
+toNat _ = Nothing
+
+-- | Convert a numeric literal into a Church-encoded number
+fromNat :: Int -> Maybe (Expr a)
+fromNat n0
+    | n0 < 0    = Nothing
+    | otherwise =
+        Just
+            (Lam "Nat" (Const Star)
+                (Lam "Succ" (Pi "pred" "Nat" "Nat")
+                    (Lam "Zero" "Nat" (go n0)) ) )
+  where
+    go !n | n <= 0    = "Zero"
+          | otherwise = App "Succ" (go (n - 1))
 
 -- | Pretty-print a value
 pretty :: Buildable a => a -> Text

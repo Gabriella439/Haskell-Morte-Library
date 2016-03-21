@@ -53,6 +53,9 @@ tokens :-
     "->" | "→"                          { \_    -> yield Arrow                 }
     "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                    }
     "\" | "λ"                           { \_    -> yield Lambda                }
+    "Natural"                           { \_    -> yield Nat                   }
+    "fromNat"                           { \_    -> yield FromNat               }
+    "toNat"                             { \_    -> yield ToNat                 }
     $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)          }
     $digit+                             { \text -> yield (Number (toInt text)) }
     "#https://" $nonwhite+              { \text -> yield (URL (toUrl text))    }
@@ -173,6 +176,9 @@ data Token
     | Number Int
     | File FilePath
     | URL String
+    | Nat
+    | FromNat
+    | ToNat
     | EOF
     deriving (Eq, Show)
 }

@@ -114,6 +114,15 @@ expr = mdo
             )
         <|> (   match Lexer.Box  *> pure (Const Box)
             )
+        <|> (   NatLit
+            <$> number
+            )
+        <|> (   match Lexer.Nat     *> pure Nat
+            )
+        <|> (   match Lexer.FromNat *> pure FromNat
+            )
+        <|> (   match Lexer.ToNat   *> pure ToNat
+            )
         <|> (   Embed
             <$> import_
             )
