@@ -123,6 +123,16 @@ expr = mdo
             )
         <|> (   match Lexer.ToNat   *> pure ToNat
             )
+        <|> (   ListLit
+            <$> (match Lexer.OpenList *> expr)
+            <*> (many (match Lexer.Comma *> expr) <* match Lexer.CloseList)
+            )
+        <|> (   match Lexer.List     *> pure List
+            )
+        <|> (   match Lexer.FromList *> pure FromList
+            )
+        <|> (   match Lexer.ToList   *> pure ToList
+            )
         <|> (   Embed
             <$> import_
             )

@@ -53,9 +53,15 @@ tokens :-
     "->" | "→"                          { \_    -> yield Arrow                 }
     "\/" | "|~|" | "forall" | "∀" | "Π" { \_    -> yield Pi                    }
     "\" | "λ"                           { \_    -> yield Lambda                }
-    "Natural"                           { \_    -> yield Nat                   }
-    "fromNat"                           { \_    -> yield FromNat               }
-    "toNat"                             { \_    -> yield ToNat                 }
+    "#Nat"                              { \_    -> yield Nat                   }
+    "#fromNat                           { \_    -> yield FromNat               }
+    "#toNat"                            { \_    -> yield ToNat                 }
+    "[nil "                             { \_    -> yield OpenList              }
+    "]"                                 { \_    -> yield CloseList             }
+    ","                                 { \_    -> yield Comma                 }
+    "#List"                             { \_    -> yield List                  }
+    "#fromList"                         { \_    -> yield FromList              }
+    "#toList"                           { \_    -> yield ToList                }
     $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)          }
     $digit+                             { \text -> yield (Number (toInt text)) }
     "#https://" $nonwhite+              { \text -> yield (URL (toUrl text))    }
@@ -179,6 +185,12 @@ data Token
     | Nat
     | FromNat
     | ToNat
+    | OpenList
+    | CloseList
+    | Comma
+    | List
+    | FromList
+    | ToList
     | EOF
     deriving (Eq, Show)
 }
