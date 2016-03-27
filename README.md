@@ -27,6 +27,12 @@ type to `stderr` and outputs the optimized program to `stdout`.  For example:
 To learn more, read the
 [Morte tutorial](http://hackage.haskell.org/package/morte/docs/Morte-Tutorial.html).
 
+You can also use a front-end. Current front ends are
+
+- [Annah](https://github.com/Gabriel439/Haskell-Annah-Library)
+
+with hopefully more to come.
+
 ## How to contribute
 
 Morte needs a front-end compiler to translate high-level abstractions to the
