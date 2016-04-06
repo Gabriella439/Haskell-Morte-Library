@@ -55,19 +55,33 @@ tokens :-
     "\" | "λ"                           { \_    -> yield Lambda                }
     $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)          }
     $digit+                             { \text -> yield (Number (toInt text)) }
-    "#https://" $nonwhite+              { \text -> yield (URL (toUrl text))    }
-    "#http://" $nonwhite+               { \text -> yield (URL (toUrl text))    }
-    "#" $nonwhite+                      { \text -> yield (File (toFile text))  }
+    "#https://" $nonwhite+              { \text -> yield (URL (toUrl' text))   }
+    "#http://" $nonwhite+               { \text -> yield (URL (toUrl' text))   }
+    "https://" $nonwhite+               { \text -> yield (URL (toUrl text))    }
+    "http://" $nonwhite+                { \text -> yield (URL (toUrl text))    }
+    "#" $nonwhite+                      { \text -> yield (File (toFile' text)) }
+    "/" $nonwhite+                      { \text -> yield (File (toFile text))  }
+    "./" $nonwhite+                     { \text -> yield (File (toFile text))  }
 {
 
 toInt :: Text -> Int
 toInt = Text.foldl' (\x c -> 10 * x + digitToInt c) 0
 
+-- | For URLs without the @#@ prefix
 toUrl :: Text -> String
-toUrl = Text.unpack . Text.drop 1
+toUrl = Text.unpack
 
+-- | For URLs with the @#@ prefix
+toUrl' :: Text -> String
+toUrl' = Text.unpack . Text.drop 1
+
+-- | For files without the @#@ prefix
 toFile :: Text -> FilePath
-toFile = Filesystem.fromText . Text.toStrict . Text.drop 1
+toFile = Filesystem.fromText . Text.toStrict
+
+-- | For files with the @#@ prefix
+toFile' :: Text -> FilePath
+toFile' = Filesystem.fromText . Text.toStrict . Text.drop 1
 
 -- This was lifted almost intact from the @alex@ source code
 encode :: Char -> (Word8, [Word8])
