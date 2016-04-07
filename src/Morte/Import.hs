@@ -263,7 +263,7 @@ clean = strip . Filesystem.collapse
   where
     strip p = case Filesystem.stripPrefix "." p of
         Nothing -> p
-        Just p' -> strip p'
+        Just p' -> p'
 
 {-| Load a `Path` as a \"dynamic\" expression (without resolving any imports)
 
@@ -338,15 +338,12 @@ loadStatic path = do
             Nothing      -> False
             Just request -> case HTTP.host request of
                 "127.0.0.1" -> True
-                "localhost" -> True
+                "localhost" -> False -- True
                 _           -> False
         local (File _)  = True
-    case paths of
-        parent:_ ->
-            if local path && not (local parent)
-            then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
-            else return ()
-        _        -> return ()
+    if local (canonicalize (path:paths)) && not (local (canonicalize paths))
+        then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
+        else return ()
 
     (expr, cached) <- if path `elem` paths
         then liftIO (throwIO (Imported paths (Cycle path)))
