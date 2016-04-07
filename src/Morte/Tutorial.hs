@@ -2035,11 +2035,11 @@ input to standard output:
 > ->  \(Zero : Nat)
 > ->  Succ (n Nat Succ Zero)
 
-    You can then import any of these expressions by prepending their file name
-    with a hash tag.  For example:
+    You can then import any of these expressions by their file name (as long as
+    you prefix relative paths with @./@).  For example:
 
 > $ morte
-> #Succ (#Succ (#Succ #Zero ))
+> ./Succ (./Succ (./Succ ./Zero ))
 > <Ctrl-D>
 > ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
 >
@@ -2049,7 +2049,7 @@ input to standard output:
     were to write:
 
 > $ morte
-> #Succ (#Succ (#Succ #Zero))
+> ./Succ (./Succ (./Succ ./Zero))
 
     ... then you would get this parsing error:
 
@@ -2069,7 +2069,7 @@ input to standard output:
     file, so it would be as if you wrote the following really long expression:
 
 > $ morte
-> -- #Succ
+> -- ./Succ
 > (   \(   n
 >     :   forall (Nat : *)
 >     ->  forall (Succ : Nat -> Nat)
@@ -2081,7 +2081,7 @@ input to standard output:
 > ->  \(Zero : Nat)
 > ->  Succ (n Nat Succ Zero)
 > )
-> (   -- #Succ
+> (   -- ./Succ
 >     (   \(   n
 >         :   forall (Nat : *)
 >         ->  forall (Succ : Nat -> Nat)
@@ -2093,7 +2093,7 @@ input to standard output:
 >     ->  \(Zero : Nat)
 >     ->  Succ (n Nat Succ Zero)
 >     )
->     (   -- #Succ
+>     (   -- ./Succ
 >         (   \(   n
 >             :   forall (Nat : *)
 >             ->  forall (Succ : Nat -> Nat)
@@ -2105,7 +2105,7 @@ input to standard output:
 >         ->  \(Zero : Nat)
 >         ->  Succ (n Nat Succ Zero)
 >         )
->         -- #Zero
+>         -- ./Zero
 >         (   \(Nat : *)
 >         ->  \(Succ : Nat -> Nat)
 >         ->  \(Zero : Nat)
@@ -2129,60 +2129,60 @@ input to standard output:
     expressions like:
 
 > $ morte
-> #id #Bool #Bool/True
+> ./id ./Bool ./Bool/True
 > <Ctrl-D>
 > ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
 > 
 > λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True
 > $ morte > exampleNumber  # Save an example number to the file `exampleNumber`
-> #Nat/Succ (#Nat/Succ (#Nat/Succ #Nat/Zero ))
+> ./Nat/Succ (./Nat/Succ (./Nat/Succ ./Nat/Zero ))
 > <Ctrl-D>
 > ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
 > 
 > $ morte  # Now we can import our saved number
-> #Nat/(+) #exampleNumber #exampleNumber
+> ./Nat/(+) ./exampleNumber ./exampleNumber
 > <Ctrl-D>
 > ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
 > 
 > λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ (Succ (Succ (Succ Zero)))))
 > $ morte
-> #even #exampleNumber
+> ./even ./exampleNumber
 > <Ctrl-D>
 > ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
 > 
 > λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → False
-> $ morte > exampleList  #Save an example list to the file `exampleList`
-> #List/Cons #Bool #Bool/True (#List/Cons #Bool #Bool/True (#List/Cons #Bool #Bool/False (#List/Nil #Bool )))
+> $ morte > exampleList  # Save an example list to the file `exampleList`
+> ./List/Cons ./Bool ./Bool/True (./List/Cons ./Bool ./Bool/True (./List/Cons ./Bool ./Bool/False (./List/Nil ./Bool )))
 > <Ctrl-D>
 > ∀(List : *) → ∀(Cons : ∀(head : ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool) → ∀(tail : List) → List) → ∀(Nil : List) → List
 > 
 > $ morte
-> #length #Bool #exampleList
+> ./length ./Bool ./exampleList
 > <Ctrl-D>
 > ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
 > 
 > λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ Zero))
 > $ morte
-> #Bool/and #exampleList
+> ./Bool/and ./exampleList
 > <Ctrl-D>
 > ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
 > 
 > λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → False
 > $ morte > double  # We can even save functions
-> \(n : #Nat ) -> #Nat/(+) n n
+> \(n : ./Nat ) -> ./Nat/(+) n n
 > <Ctrl-D>
 > ∀(n : ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat) → ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
 > $ morte  # ... then reuse those saved functions
-> #double #exampleNumber
+> ./double ./exampleNumber
 > <Ctrl-D>
 > ∀(Nat : *) → ∀(Succ : Nat → Nat) → ∀(Zero : Nat) → Nat
 > 
 > λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ (Succ (Succ (Succ Zero)))))
 
-    Notice that some paths (like @#Bool@) actually point to directories.  If you
+    Notice that some paths (like @./Bool@) actually point to directories.  If you
     provide a directory then Morte will look for a file named @\'\@\'@ located
     underneath that directory and use that instead.  So, for example, if we
-    specify @#Bool@ that actually translates to the file located at @Bool/\@@.
+    specify @./Bool@ that actually translates to the file located at @Bool/\@@.
 
     You can also import expressions hosted on network endpoints.  For example,
     there are several example expressions hosted at:
@@ -2199,9 +2199,9 @@ input to standard output:
     We can either import these expressions directly by referencing their URLs:
 
 > $ morte
-> #http://sigil.place/tutorial/morte/1.2/id       
->     #http://sigil.place/tutorial/morte/1.2/Bool
->     #http://sigil.place/tutorial/morte/1.2/Bool/True
+> http://sigil.place/tutorial/morte/1.2/id       
+>     http://sigil.place/tutorial/morte/1.2/Bool
+>     http://sigil.place/tutorial/morte/1.2/Bool/True
 > <Ctrl-D>
 > ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
 > 
@@ -2209,16 +2209,16 @@ input to standard output:
 
     ... or we could use local files to create short aliases for these URLs:
 
-> $ echo "#http://sigil.place/tutorial/morte/1.2/id" > id
+> $ echo "http://sigil.place/tutorial/morte/1.2/id" > id
 > $ mkdir Bool
-> $ echo "#http://sigil.place/tutorial/morte/1.2/Bool" > Bool/@
-> $ echo "#http://sigil.place/tutorial/morte/1.2/Bool/True" > Bool/True
+> $ echo "http://sigil.place/tutorial/morte/1.2/Bool" > Bool/@
+> $ echo "http://sigil.place/tutorial/morte/1.2/Bool/True" > Bool/True
 
     Now whenever we reference these local files they will in turn download the
     expressions hosted on the URL that they point to:
 
 > $ morte
-> #id #Bool #Bool/True  -- Exact same result, except now using remote code
+> ./id ./Bool ./Bool/True  -- Exact same result, except now using remote code
 > <Ctrl-D>
 > ∀(Bool : *) → ∀(True : Bool) → ∀(False : Bool) → Bool
 > 
@@ -2239,9 +2239,9 @@ input to standard output:
     For example, suppose that we wished to take our contrived example and host
     it on the network.  We'd simply host this text on any URL that we own:
 
-> #http://sigil.place/tutorial/morte/1.2/id
->     #http://sigil.place/tutorial/morte/1.2/Bool
->     #http://sigil.place/tutorial/morte/1.2/Bool/True
+> http://sigil.place/tutorial/morte/1.2/id
+>     http://sigil.place/tutorial/morte/1.2/Bool
+>     http://sigil.place/tutorial/morte/1.2/Bool/True
 
     ... and then other people would be able to import our code within their
     programs by referencing our URL.  Then when they downloaded our expression
@@ -2250,7 +2250,7 @@ input to standard output:
     Note that when we host an expression on the network we can no longer use
     local imports within our code.  For example, you cannot host code like this:
 
-> #id #Bool #Bool/True
+> ./id ./Bool ./Bool/True
 
     ... because client compilers that download your code would have no way of
     retrieving your local files.  Fortunately, the compiler enforces that all
