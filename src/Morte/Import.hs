@@ -161,18 +161,20 @@ instance Exception e => Exception (Imported e)
 instance Show e => Show (Imported e) where
     show (Imported paths e) =
             "\n"
-        ++  unlines (map (\path -> "⤷ " ++ builderToString (build path))
-                         (drop 1 (reverse paths')) )
+        ++  unlines (map (\path -> "⤷ " ++ builderToString (build path)) paths')
         ++  show e
       where
         -- Canonicalize all paths
-        paths' = map canonicalize (tails paths)
+        paths' = drop 1 (reverse (canonicalizeAll paths))
 
 data Status = Status
     { _stack   :: [Path]
     , _cache   :: Map Path (Expr X)
     , _manager :: Maybe Manager
     }
+
+canonicalizeAll :: [Path] -> [Path]
+canonicalizeAll = map canonicalize . tails
 
 stack :: Lens' Status [Path]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
@@ -345,7 +347,7 @@ loadStatic path = do
         then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
         else return ()
 
-    (expr, cached) <- if path `elem` paths
+    (expr, cached) <- if canonicalize (path:paths) `elem` canonicalizeAll paths
         then liftIO (throwIO (Imported paths (Cycle path)))
         else do
             m <- zoom cache get
