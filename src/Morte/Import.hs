@@ -338,7 +338,7 @@ loadStatic path = do
             Nothing      -> False
             Just request -> case HTTP.host request of
                 "127.0.0.1" -> True
-                "localhost" -> False -- True
+                "localhost" -> True
                 _           -> False
         local (File _)  = True
     if local (canonicalize (path:paths)) && not (local (canonicalize paths))
