@@ -15,6 +15,7 @@ module Morte.Lexer (
 import Control.Monad.Trans.State.Strict (State, get)
 import Data.Bits (shiftR, (.&.))
 import Data.Char (digitToInt, ord)
+import Data.Int (Int64)
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
@@ -55,33 +56,23 @@ tokens :-
     "\" | "λ"                           { \_    -> yield Lambda                }
     $fst $labelchar* | "(" $opchar+ ")" { \text -> yield (Label text)          }
     $digit+                             { \text -> yield (Number (toInt text)) }
-    "#https://" $nonwhite+              { \text -> yield (URL (toUrl' text))   }
-    "#http://" $nonwhite+               { \text -> yield (URL (toUrl' text))   }
-    "https://" $nonwhite+               { \text -> yield (URL (toUrl text))    }
-    "http://" $nonwhite+                { \text -> yield (URL (toUrl text))    }
-    "#" $nonwhite+                      { \text -> yield (File (toFile' text)) }
-    "/" $nonwhite+                      { \text -> yield (File (toFile text))  }
-    "./" $nonwhite+                     { \text -> yield (File (toFile text))  }
+    "#https://" $nonwhite+              { \text -> yield (URL (toUrl 1 text))  }
+    "#http://" $nonwhite+               { \text -> yield (URL (toUrl 1 text))  }
+    "https://" $nonwhite+               { \text -> yield (URL (toUrl 0 text))  }
+    "http://" $nonwhite+                { \text -> yield (URL (toUrl 0 text))  }
+    "#" $nonwhite+                      { \text -> yield (File (toFile 1 text))}
+    "/" $nonwhite+                      { \text -> yield (File (toFile 0 text))}
+    "./" $nonwhite+                     { \text -> yield (File (toFile 2 text))}
 {
 
 toInt :: Text -> Int
 toInt = Text.foldl' (\x c -> 10 * x + digitToInt c) 0
 
--- | For URLs without the @#@ prefix
-toUrl :: Text -> String
-toUrl = Text.unpack
+toUrl :: Int64 -> Text -> String
+toUrl n = Text.unpack . Text.drop n
 
--- | For URLs with the @#@ prefix
-toUrl' :: Text -> String
-toUrl' = Text.unpack . Text.drop 1
-
--- | For files without the @#@ prefix
-toFile :: Text -> FilePath
-toFile = Filesystem.fromText . Text.toStrict
-
--- | For files with the @#@ prefix
-toFile' :: Text -> FilePath
-toFile' = Filesystem.fromText . Text.toStrict . Text.drop 1
+toFile :: Int64 -> Text -> FilePath
+toFile n = Filesystem.fromText . Text.toStrict . Text.drop n
 
 -- This was lifted almost intact from the @alex@ source code
 encode :: Char -> (Word8, [Word8])

@@ -75,6 +75,7 @@ import Control.Exception (Exception, IOException, catch, onException, throwIO)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
+import Data.List (tails)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Monoid ((<>))
@@ -85,7 +86,7 @@ import Data.Text.Lazy.Builder (Builder)
 import qualified Data.Text.Lazy.Builder as Builder
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
-import Filesystem.Path ((</>))
+import Filesystem.Path ((</>), FilePath)
 import Filesystem as Filesystem
 import Lens.Micro (Lens')
 import Lens.Micro.Mtl (zoom)
@@ -96,6 +97,8 @@ import Prelude hiding (FilePath)
 
 import Morte.Core (Expr, Path(..), X(..), typeOf)
 import Morte.Parser (exprFromText)
+
+import qualified Filesystem.Path.CurrentOS as Filesystem
 
 builderToString :: Builder -> String
 builderToString = Text.unpack . Builder.toLazyText
@@ -159,8 +162,11 @@ instance Show e => Show (Imported e) where
     show (Imported paths e) =
             "\n"
         ++  unlines (map (\path -> "⤷ " ++ builderToString (build path))
-                         (reverse paths) )
+                         (drop 1 (reverse paths')) )
         ++  show e
+      where
+        -- Canonicalize all paths
+        paths' = map canonicalize (tails paths)
 
 data Status = Status
     { _stack   :: [Path]
@@ -189,27 +195,88 @@ needManager = do
             zoom manager (put (Just m))
             return m
 
--- | Load a `Path` as a \"dynamic\" expression (without resolving any imports)
+{-| This function computes the current path by taking the last absolute path
+    (either an absolute `FilePath` or `URL`) and combining it with all following
+    relative paths
+
+    For example, if the file `./foo/bar` imports `./baz`, that will resolve to
+    `./foo/baz`.  Relative imports are relative to a file's parent directory.
+    This also works for URLs, too.
+
+    This code is full of all sorts of edge cases so it wouldn't surprise me at
+    all if you find something broken in here.  Most of the ugliness is due to:
+
+    * Handling paths ending with @/\@@ by stripping the @/\@@ suffix if and only
+      if you navigate to any downstream relative paths
+    * Removing spurious @.@s and @..@s from the path
+
+    Also, there are way too many `reverse`s in the URL-handling cod  For now I
+    don't mind, but if were to really do this correctly we'd store the URLs as
+    `Text` for O(1) access to the end of the string.  The only reason we use
+    `String` at all is for consistency with the @http-client@ library.
+-}
+canonicalize :: [Path] -> Path
+canonicalize  []                 = File "."
+canonicalize (File file0:paths0) =
+    if Filesystem.relative file0
+    then go          file0 paths0
+    else File (clean file0)
+  where
+    go currPath  []               = File (clean currPath)
+    go currPath (URL  url :_    ) = case lastMay prefix of
+        Just '/' -> URL (prefix ++        suffix)
+        _        -> URL (prefix ++ "/" ++ suffix)
+      where
+        prefix = parentURL (removeAtFromURL url)
+        suffix = Filesystem.encodeString (clean currPath)
+    go currPath (File file:paths) =
+        if Filesystem.relative file
+        then go          file'  paths
+        else File (clean file')
+      where
+        file' = Filesystem.parent (removeAtFromFile file) </> currPath
+canonicalize (URL path:_) = URL path
+
+parentURL :: String -> String
+parentURL = reverse . dropWhile (/= '/') . reverse
+
+removeAtFromURL:: String -> String
+removeAtFromURL url = case reverse url of
+    '@':'/':url' -> reverse url'
+    '/':url'     -> reverse url'
+    _            -> url
+
+removeAtFromFile :: FilePath -> FilePath
+removeAtFromFile file =
+    if Filesystem.filename file == "@"
+    then Filesystem.parent file
+    else file
+
+lastMay :: [a] -> Maybe a
+lastMay []     = Nothing
+lastMay [x]    = Just x
+lastMay (_:xs) = lastMay xs
+
+-- | Remove all @.@'s and @..@'s in the path
+clean :: FilePath -> FilePath
+clean = strip . Filesystem.collapse
+  where
+    strip p = case Filesystem.stripPrefix "." p of
+        Nothing -> p
+        Just p' -> strip p'
+
+{-| Load a `Path` as a \"dynamic\" expression (without resolving any imports)
+
+    This also returns the true final path (i.e. explicit "/@" at the end for
+    directories)
+-}
 loadDynamic :: Path -> StateT Status IO (Expr Path)
 loadDynamic p = do
     paths <- zoom stack get
-    txt <- case p of
-        File file -> do
-            let readFile' = do
-                    Filesystem.readTextFile file `catch` (\e -> do
-                    -- Unfortunately, GHC throws an `InappropriateType`
-                    -- exception when trying to read a directory, but does not
-                    -- export the exception, so I must resort to a more
-                    -- heavy-handed `catch`
-                    let _ = e :: IOException
-                    -- If the fallback fails, reuse the original exception to
-                    -- avoid user confusion
-                    Filesystem.readTextFile (file </> "@")
-                        `onException` throwIO e )
-            liftIO (fmap Text.fromStrict readFile')
-        URL  url  -> do
-            request  <- liftIO (HTTP.parseUrl url)
-            m        <- needManager
+
+    let readURL url = do
+            request <- liftIO (HTTP.parseUrl url)
+            m       <- needManager
             let httpLbs' = do
                     HTTP.httpLbs request m `catch` (\e -> case e of
                         HTTP.StatusCodeException _ _ _ -> do
@@ -224,7 +291,25 @@ loadDynamic p = do
                 Left  err -> liftIO (throwIO err)
                 Right txt -> return txt
 
-    let abort err = liftIO (throwIO (Imported paths err))
+    let readFile' file = liftIO (do
+            (do txt <- Filesystem.readTextFile file
+                return (Text.fromStrict txt) ) `catch` (\e -> do
+                -- Unfortunately, GHC throws an `InappropriateType`
+                -- exception when trying to read a directory, but does not
+                -- export the exception, so I must resort to a more
+                -- heavy-handed `catch`
+                let _ = e :: IOException
+                -- If the fallback fails, reuse the original exception to
+                -- avoid user confusion
+                let file' = file </> "@"
+                txt <- Filesystem.readTextFile file' `onException` throwIO e
+                return (Text.fromStrict txt) ) )
+
+    txt <- case canonicalize (p:paths) of
+        File file -> readFile' file
+        URL  url  -> readURL   url
+    
+    let abort err = liftIO (throwIO (Imported (p:paths) err))
     case exprFromText txt of
         Left  err  -> case p of
             URL url -> do
@@ -241,8 +326,8 @@ loadDynamic p = do
                     Right txt' -> case exprFromText txt' of
                         Left  _    -> liftIO (abort err)
                         Right expr -> return expr
-            _      -> liftIO (abort err)
-        Right expr -> return expr 
+            _       -> liftIO (abort err)
+        Right expr -> return expr
 
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
 loadStatic :: Path -> StateT Status IO (Expr X)
@@ -263,8 +348,6 @@ loadStatic path = do
             else return ()
         _        -> return ()
 
-    let paths' = path:paths
-    zoom stack (put paths')
     (expr, cached) <- if path `elem` paths
         then liftIO (throwIO (Imported paths (Cycle path)))
         else do
@@ -279,7 +362,12 @@ loadStatic path = do
                             zoom cache (put $! Map.insert path expr m)
                             return expr
                         -- Some imports left, so recurse
-                        Nothing   -> fmap join (traverse loadStatic expr')
+                        Nothing   -> do
+                            let paths' = path:paths
+                            zoom stack (put paths')
+                            expr'' <- fmap join (traverse loadStatic expr')
+                            zoom stack (put paths)
+                            return expr''
                     return (expr'', False)
 
     -- Type-check expressions here for two separate reasons:
@@ -292,10 +380,8 @@ loadStatic path = do
     if cached
         then return ()
         else case typeOf expr of
-            Left  err -> liftIO (throwIO (Imported paths' err))
+            Left  err -> liftIO (throwIO (Imported (path:paths) err))
             Right _   -> return ()
-
-    zoom stack (put paths)
 
     return expr
 
