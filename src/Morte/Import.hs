@@ -5,8 +5,9 @@
 {-| Morte lets you import external expressions located either in local files or
     hosted on network endpoints.
 
-    To import a local file as an expression, just prepend the file path with a
-    hash tag.  For example, suppose we had the following three local files:
+    To import a local file as an expression, just insert the path to the file,
+    prepending a @./@ if the path is relative to the current directory.  For
+    example, suppose we had the following three local files:
 
     > -- id
     > \(a : *) -> \(x : a) -> x
@@ -19,7 +20,7 @@
 
     You could then reference them within a Morte expression using this syntax:
 
-    > #id #Bool #True
+    > ./id ./Bool ./True
 
     ... which would embed their expressions directly within the syntax tree:
 
@@ -33,22 +34,22 @@
     example, if you had these two files:
 
     > -- foo
-    > #bar
+    > ./bar
 
     > -- bar
-    > #foo
+    > ./foo
 
     ... Morte would throw the following exception if you tried to import @foo@:
 
     > morte: 
-    > ⤷ #foo
-    > ⤷ #bar
-    > Cyclic import: #foo
+    > ⤷ foo
+    > ⤷ bar
+    > Cyclic import: foo
 
-    You can also import expressions hosted on network endpoints.  Just use a
-    hashtag followed by a URL:
+    You can also import expressions hosted on network endpoints.  Just use the
+    URL
 
-    > #http://host[:port]/path
+    > http://host[:port]/path
 
     The compiler expects the downloaded expressions to be in the same format 
     as local files, specifically UTF8-encoded source code text.
@@ -56,7 +57,7 @@
     For example, if our @id@ expression were hosted at @http://example.com/id@,
     then we would embed the expression within our code using:
 
-    > #http://example.com/id
+    > http://example.com/id
 
     You can also reuse directory names as expressions.  If you provide a path
     to a local or remote directory then the compiler will look for a file named
