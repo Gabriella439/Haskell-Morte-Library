@@ -22,7 +22,7 @@ Description: Morte is a typed, purely functional, and strongly normalizing
     .
     "Morte.Lexer" contains the @alex@-generated lexer for Morte
     .
-    "Morte.Parser" contains the @happy@-generated parser for Morte
+    "Morte.Parser" contains the parser for Morte
     .
     Read "Morte.Tutorial" to learn how to use this library
 Category: Compiler
