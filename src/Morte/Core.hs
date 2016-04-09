@@ -204,7 +204,7 @@ rule Box  Star = return Star
 -- | Path to an external resource
 data Path
     = File FilePath
-    | URL  String
+    | URL  Text
     deriving (Eq, Ord, Show)
 
 instance Buildable Path where

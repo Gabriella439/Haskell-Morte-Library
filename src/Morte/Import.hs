@@ -81,6 +81,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Monoid ((<>))
 import Data.Text.Buildable (build)
+import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as Text
 import qualified Data.Text.Lazy.Encoding as Text
 import Data.Text.Lazy.Builder (Builder)
@@ -226,12 +227,18 @@ canonicalize (File file0:paths0) =
     else File (clean file0)
   where
     go currPath  []               = File (clean currPath)
-    go currPath (URL  url :_    ) = case lastMay prefix of
-        Just '/' -> URL (prefix ++        suffix)
-        _        -> URL (prefix ++ "/" ++ suffix)
+    go currPath (URL  url :_    ) =
+        -- This `last` is safe because the lexer constraints all URLs to be
+        -- non-empty.  I couldn't find a simple and safe equivalent in the
+        -- `text` API
+        case Text.last prefix of
+            '/' -> URL (prefix <>        suffix)
+            _   -> URL (prefix <> "/" <> suffix)
       where
         prefix = parentURL (removeAtFromURL url)
-        suffix = Filesystem.encodeString (clean currPath)
+        suffix = Text.fromStrict (case Filesystem.toText (clean currPath) of
+            Left  txt -> txt
+            Right txt -> txt )
     go currPath (File file:paths) =
         if Filesystem.relative file
         then go          file'  paths
@@ -240,25 +247,20 @@ canonicalize (File file0:paths0) =
         file' = Filesystem.parent (removeAtFromFile file) </> currPath
 canonicalize (URL path:_) = URL path
 
-parentURL :: String -> String
-parentURL = reverse . dropWhile (/= '/') . reverse
+parentURL :: Text -> Text
+parentURL = Text.dropWhileEnd (/= '/')
 
-removeAtFromURL:: String -> String
-removeAtFromURL url = case reverse url of
-    '@':'/':url' -> reverse url'
-    '/':url'     -> reverse url'
-    _            -> url
+removeAtFromURL:: Text -> Text
+removeAtFromURL url
+    | Text.isSuffixOf "/@" url = Text.dropEnd 2 url
+    | Text.isSuffixOf "/"  url = Text.dropEnd 1 url
+    | otherwise                =                url
 
 removeAtFromFile :: FilePath -> FilePath
 removeAtFromFile file =
     if Filesystem.filename file == "@"
     then Filesystem.parent file
     else file
-
-lastMay :: [a] -> Maybe a
-lastMay []     = Nothing
-lastMay [x]    = Just x
-lastMay (_:xs) = lastMay xs
 
 -- | Remove all @.@'s and @..@'s in the path
 clean :: FilePath -> FilePath
@@ -278,7 +280,7 @@ loadDynamic p = do
     paths <- zoom stack get
 
     let readURL url = do
-            request <- liftIO (HTTP.parseUrl url)
+            request <- liftIO (HTTP.parseUrl (Text.unpack url))
             m       <- needManager
             let httpLbs' = do
                     HTTP.httpLbs request m `catch` (\e -> case e of
@@ -319,7 +321,7 @@ loadDynamic p = do
                 -- Also try the fallback in case of a parse error, since the
                 -- parse error might signify that this URL points to a directory
                 -- list
-                request  <- liftIO (HTTP.parseUrl url)
+                request  <- liftIO (HTTP.parseUrl (Text.unpack url))
                 let request' = request { HTTP.path = HTTP.path request <> "/@" }
                 m        <- needManager
                 response <- liftIO
@@ -337,7 +339,7 @@ loadStatic :: Path -> StateT Status IO (Expr X)
 loadStatic path = do
     paths <- zoom stack get
 
-    let local (URL url) = case HTTP.parseUrl url of
+    let local (URL url) = case HTTP.parseUrl (Text.unpack url) of
             Nothing      -> False
             Just request -> case HTTP.host request of
                 "127.0.0.1" -> True

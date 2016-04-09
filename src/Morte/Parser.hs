@@ -62,7 +62,7 @@ file = fmap unsafeFromFile (satisfy isFile)
 
     unsafeFromFile (LocatedToken (Lexer.File n) _) = n
 
-url :: Prod r e LocatedToken String
+url :: Prod r e LocatedToken Text
 url = fmap unsafeFromURL (satisfy isURL)
   where
     isURL (LocatedToken (Lexer.URL _) _) = True

@@ -68,8 +68,8 @@ tokens :-
 toInt :: Text -> Int
 toInt = Text.foldl' (\x c -> 10 * x + digitToInt c) 0
 
-toUrl :: Int64 -> Text -> String
-toUrl n = Text.unpack . Text.drop n
+toUrl :: Int64 -> Text -> Text
+toUrl = Text.drop
 
 toFile :: Int64 -> Text -> FilePath
 toFile n = Filesystem.fromText . Text.toStrict . Text.drop n
@@ -177,7 +177,7 @@ data Token
     | Label Text
     | Number Int
     | File FilePath
-    | URL String
+    | URL Text
     | EOF
     deriving (Eq, Show)
 }
