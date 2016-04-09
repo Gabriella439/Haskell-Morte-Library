@@ -69,32 +69,31 @@ module Morte.Core (
     TypeMessage(..),
     ) where
 
-import Control.Applicative (Applicative(pure, (<*>)), (<$>))
+import Control.Applicative (Applicative(..))
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception)
 import Control.Monad (mzero)
-import Control.Monad.Trans.State (evalState)
-import qualified Control.Monad.Trans.State as State
 import Data.Binary (Binary(..), Get, Put)
-import Data.Binary.Get (getWord64le)
-import Data.Binary.Put (putWord64le)
-import Data.Foldable (Foldable(..))
+import Data.Foldable
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
-import Data.Text.Lazy (Text, unpack)
-import qualified Data.Text.Encoding as Text
-import qualified Data.Text.Lazy as Text
-import qualified Data.Text.Lazy.Builder as Builder
-import Data.Traversable (Traversable(..))
+import Data.Text.Lazy (Text)
+import Data.Traversable
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
-import qualified Filesystem.Path.CurrentOS as Filesystem
 import Morte.Context (Context)
 import Prelude hiding (FilePath)
 
-import qualified Morte.Context as Context
+import qualified Control.Monad.Trans.State as State
+import qualified Data.Binary.Get           as Get
+import qualified Data.Binary.Put           as Put
+import qualified Data.Text.Encoding        as Text
+import qualified Data.Text.Lazy            as Text
+import qualified Data.Text.Lazy.Builder    as Builder
+import qualified Filesystem.Path.CurrentOS as Filesystem
+import qualified Morte.Context             as Context
 
 {-| Label for a bound variable
 
@@ -143,8 +142,8 @@ getUtf8 = do
 instance Binary Var where
     put (V x n) = do
         putUtf8 x
-        putWord64le (fromIntegral n)
-    get = V <$> getUtf8 <*> fmap fromIntegral getWord64le
+        Put.putWord64le (fromIntegral n)
+    get = V <$> getUtf8 <*> fmap fromIntegral Get.getWord64le
 
 instance IsString Var
   where
@@ -285,7 +284,7 @@ match xL nL xR nR ((xL', xR'):xs) = nL' `seq` nR' `seq` match xL nL' xR nR' xs
     nR' = if xR == xR' then nR - 1 else nR
 
 instance Eq a => Eq (Expr a) where
-    eL0 == eR0 = evalState (go (normalize eL0) (normalize eR0)) []
+    eL0 == eR0 = State.evalState (go (normalize eL0) (normalize eR0)) []
       where
 --      go :: Expr a -> Expr a -> State [(Text, Text)] Bool
         go (Const cL) (Const cR) = return (cL == cR)
@@ -443,7 +442,7 @@ data TypeError = TypeError
     } deriving (Typeable)
 
 instance Show TypeError where
-    show = unpack . pretty
+    show = Text.unpack . pretty
 
 instance Exception TypeError
 

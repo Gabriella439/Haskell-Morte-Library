@@ -12,18 +12,20 @@ module Morte.Lexer (
     LocatedToken(..)
     ) where
 
-import Control.Monad.Trans.State.Strict (State, get)
+import Control.Monad.Trans.State.Strict (State)
 import Data.Bits (shiftR, (.&.))
 import Data.Char (digitToInt, ord)
 import Data.Int (Int64)
 import Data.Text.Lazy (Text)
-import qualified Data.Text.Lazy as Text
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
-import qualified Filesystem.Path.CurrentOS as Filesystem
 import Lens.Micro.Mtl ((.=), (+=))
 import Pipes (Producer, for, lift, yield)
 import Prelude hiding (FilePath)
+
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Text.Lazy                   as Text
+import qualified Filesystem.Path.CurrentOS        as Filesystem
 
 }
 
@@ -143,7 +145,7 @@ lexExpr :: Text -> Producer LocatedToken (State Position) (Maybe Text)
 lexExpr text = for (go (AlexInput '\n' [] text)) tag
   where
     tag token = do
-        pos <- lift get
+        pos <- lift State.get
         yield (LocatedToken token pos)
 
     go input = case alexScan input 0 of
