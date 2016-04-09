@@ -65,6 +65,7 @@ tokens :-
     "#" $nonwhite+                      { \text -> yield (File (toFile 1 text))}
     "/" $nonwhite+                      { \text -> yield (File (toFile 0 text))}
     "./" $nonwhite+                     { \text -> yield (File (toFile 2 text))}
+    "../" $nonwhite+                    { \text -> yield (File (toFile 0 text))}
 {
 
 toInt :: Text -> Int
