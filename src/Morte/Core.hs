@@ -207,11 +207,15 @@ data Path
     deriving (Eq, Ord, Show)
 
 instance Buildable Path where
-    build (File file) = case Filesystem.stripPrefix "." file of
-        Nothing -> "./" <> build (toText' file) <> " "
-        _       ->         build (toText' file) <> " "
+    build (File file)
+        |  Text.isPrefixOf  "./" txt
+        || Text.isPrefixOf   "/" txt
+        || Text.isPrefixOf "../" txt
+        = build txt <> " "
+        | otherwise
+        = "./" <> build txt <> " "
       where
-        toText' = either id id . Filesystem.toText
+        txt = Text.fromStrict (either id id (Filesystem.toText file))
     build (URL  str ) = build str <> " "
 
 {-| Like `Data.Void.Void`, except with an `NFData` instance in order to avoid
