@@ -86,14 +86,14 @@ import Filesystem.Path.CurrentOS (FilePath)
 import Morte.Context (Context)
 import Prelude hiding (FilePath)
 
-import qualified Control.Monad.Trans.State as State
-import qualified Data.Binary.Get           as Get
-import qualified Data.Binary.Put           as Put
-import qualified Data.Text.Encoding        as Text
-import qualified Data.Text.Lazy            as Text
-import qualified Data.Text.Lazy.Builder    as Builder
-import qualified Filesystem.Path.CurrentOS as Filesystem
-import qualified Morte.Context             as Context
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Binary.Get                  as Get
+import qualified Data.Binary.Put                  as Put
+import qualified Data.Text.Encoding               as Text
+import qualified Data.Text.Lazy                   as Text
+import qualified Data.Text.Lazy.Builder           as Builder
+import qualified Filesystem.Path.CurrentOS        as Filesystem
+import qualified Morte.Context                    as Context
 
 {-| Label for a bound variable
 
