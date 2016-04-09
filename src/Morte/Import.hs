@@ -74,33 +74,34 @@ module Morte.Import (
 
 import Control.Exception (Exception, IOException, catch, onException, throwIO)
 import Control.Monad (join)
-import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
-import Data.List (tails)
+import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Trans.State.Strict (StateT)
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 import Data.Monoid ((<>))
 import Data.Text.Buildable (build)
 import Data.Text.Lazy (Text)
-import qualified Data.Text.Lazy as Text
-import qualified Data.Text.Lazy.Encoding as Text
 import Data.Text.Lazy.Builder (Builder)
-import qualified Data.Text.Lazy.Builder as Builder
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
 import Filesystem as Filesystem
 import Lens.Micro (Lens')
 import Lens.Micro.Mtl (zoom)
+import Morte.Core (Expr, Path(..), X(..))
 import Network.HTTP.Client (Manager)
-import qualified Network.HTTP.Client as HTTP
-import qualified Network.HTTP.Client.TLS as HTTP
 import Prelude hiding (FilePath)
 
-import Morte.Core (Expr, Path(..), X(..), typeOf)
-import Morte.Parser (exprFromText)
-
-import qualified Filesystem.Path.CurrentOS as Filesystem
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.List                        as List
+import qualified Data.Map.Strict                  as Map
+import qualified Data.Text.Lazy                   as Text
+import qualified Data.Text.Lazy.Builder           as Builder
+import qualified Data.Text.Lazy.Encoding          as Text
+import qualified Morte.Core                       as Morte
+import qualified Morte.Parser                     as Morte
+import qualified Network.HTTP.Client              as HTTP
+import qualified Network.HTTP.Client.TLS          as HTTP
+import qualified Filesystem.Path.CurrentOS        as Filesystem
 
 builderToString :: Builder -> String
 builderToString = Text.unpack . Builder.toLazyText
@@ -176,7 +177,7 @@ data Status = Status
     }
 
 canonicalizeAll :: [Path] -> [Path]
-canonicalizeAll = map canonicalize . tails
+canonicalizeAll = map canonicalize . List.tails
 
 stack :: Lens' Status [Path]
 stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
@@ -189,14 +190,14 @@ manager k s = fmap (\x -> s { _manager = x }) (k (_manager s))
 
 needManager :: StateT Status IO Manager
 needManager = do
-    x <- zoom manager get
+    x <- zoom manager State.get
     case x of
         Just m  -> return m
         Nothing -> do
             let settings = HTTP.tlsManagerSettings
                     { HTTP.managerResponseTimeout = Just 1000000 }  -- 1 second
             m <- liftIO (HTTP.newManager settings)
-            zoom manager (put (Just m))
+            zoom manager (State.put (Just m))
             return m
 
 {-| This function computes the current path by taking the last absolute path
@@ -277,7 +278,7 @@ clean = strip . Filesystem.collapse
 -}
 loadDynamic :: Path -> StateT Status IO (Expr Path)
 loadDynamic p = do
-    paths <- zoom stack get
+    paths <- zoom stack State.get
 
     let readURL url = do
             request <- liftIO (HTTP.parseUrl (Text.unpack url))
@@ -315,7 +316,7 @@ loadDynamic p = do
         URL  url  -> readURL   url
     
     let abort err = liftIO (throwIO (Imported (p:paths) err))
-    case exprFromText txt of
+    case Morte.exprFromText txt of
         Left  err  -> case p of
             URL url -> do
                 -- Also try the fallback in case of a parse error, since the
@@ -328,7 +329,7 @@ loadDynamic p = do
                     (HTTP.httpLbs request' m `onException` abort err)
                 case Text.decodeUtf8' (HTTP.responseBody response) of
                     Left  _    -> liftIO (abort err)
-                    Right txt' -> case exprFromText txt' of
+                    Right txt' -> case Morte.exprFromText txt' of
                         Left  _    -> liftIO (abort err)
                         Right expr -> return expr
             _       -> liftIO (abort err)
@@ -337,7 +338,7 @@ loadDynamic p = do
 -- | Load a `Path` as a \"static\" expression (with all imports resolved)
 loadStatic :: Path -> StateT Status IO (Expr X)
 loadStatic path = do
-    paths <- zoom stack get
+    paths <- zoom stack State.get
 
     let local (URL url) = case HTTP.parseUrl (Text.unpack url) of
             Nothing      -> False
@@ -353,7 +354,7 @@ loadStatic path = do
     (expr, cached) <- if canonicalize (path:paths) `elem` canonicalizeAll paths
         then liftIO (throwIO (Imported paths (Cycle path)))
         else do
-            m <- zoom cache get
+            m <- zoom cache State.get
             case Map.lookup path m of
                 Just expr -> return (expr, True)
                 Nothing   -> do
@@ -361,14 +362,14 @@ loadStatic path = do
                     expr'' <- case traverse (\_ -> Nothing) expr' of
                         -- No imports left
                         Just expr -> do
-                            zoom cache (put $! Map.insert path expr m)
+                            zoom cache (State.put $! Map.insert path expr m)
                             return expr
                         -- Some imports left, so recurse
                         Nothing   -> do
                             let paths' = path:paths
-                            zoom stack (put paths')
+                            zoom stack (State.put paths')
                             expr'' <- fmap join (traverse loadStatic expr')
-                            zoom stack (put paths)
+                            zoom stack (State.put paths)
                             return expr''
                     return (expr'', False)
 
@@ -381,7 +382,7 @@ loadStatic path = do
     -- have already been checked
     if cached
         then return ()
-        else case typeOf expr of
+        else case Morte.typeOf expr of
             Left  err -> liftIO (throwIO (Imported (path:paths) err))
             Right _   -> return ()
 
@@ -389,6 +390,6 @@ loadStatic path = do
 
 -- | Resolve all imports within an expression
 load :: Expr Path -> IO (Expr X)
-load expr = evalStateT (fmap join (traverse loadStatic expr)) status
+load expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
   where
     status = Status [] Map.empty Nothing
