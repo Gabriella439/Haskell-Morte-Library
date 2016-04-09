@@ -69,7 +69,7 @@ module Morte.Core (
     TypeMessage(..),
     ) where
 
-import Control.Applicative (Applicative(..))
+import Control.Applicative (Applicative(..), (<$>))
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception)
 import Control.Monad (mzero)
