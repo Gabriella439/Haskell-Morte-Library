@@ -82,7 +82,7 @@ example path stderr stdout = do
     case Morte.exprFromText stdin of
         Left  e    -> throwIO e
         Right expr -> do
-            expr' <- Morte.load expr
+            expr' <- Morte.load Nothing expr
             case Morte.typeOf expr' of
                 Left  e        -> throwIO e
                 Right typeExpr -> do
