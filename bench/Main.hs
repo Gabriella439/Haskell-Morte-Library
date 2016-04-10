@@ -19,7 +19,7 @@ readMorteFile filename = do
     text <- Text.readFile str
     case Morte.exprFromText text of
         Left  e    -> throwIO e
-        Right expr -> Morte.load expr
+        Right expr -> Morte.load Nothing expr
 
 main :: IO ()
 main = defaultMain
