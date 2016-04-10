@@ -3,14 +3,14 @@ module Main where
 import Control.Exception (Exception, throwIO)
 import Data.Monoid (mempty)
 import Data.Traversable
-import qualified Data.Text.Lazy.IO as Text
 import Morte.Core (typeOf, pretty, normalize)
+import Morte.Import (load)
 import Morte.Parser (exprFromText)
 import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
-import Morte.Import (load)
+import qualified Data.Text.Lazy.IO as Text
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = throwIO e
@@ -72,7 +72,7 @@ main = do
         Default -> do
             inText   <- Text.getContents
             expr     <- throws (exprFromText inText)
-            expr'    <- load expr
+            expr'    <- load Nothing expr
             typeExpr <- throws (typeOf expr')
             Text.hPutStrLn stderr (pretty (normalize typeExpr))
             Text.hPutStrLn stderr mempty
@@ -80,7 +80,7 @@ main = do
         Resolve   -> do
             inText <- Text.getContents
             expr   <- throws (exprFromText inText)
-            expr'  <- load expr
+            expr'  <- load Nothing expr
             Text.putStrLn (pretty expr')
         TypeCheck -> do
             inText <- Text.getContents

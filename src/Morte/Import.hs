@@ -92,6 +92,7 @@ import Network.HTTP.Client (Manager)
 import Prelude hiding (FilePath)
 
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Foldable                    as Foldable
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Lazy                   as Text
@@ -290,11 +291,12 @@ loadDynamic p = do
                                     { HTTP.path = HTTP.path request <> "/@" }
                             -- If the fallback fails, reuse the original
                             -- exception to avoid user confusion
-                            HTTP.httpLbs request' m `onException` throwIO e
-                        _ -> throwIO e )
+                            HTTP.httpLbs request' m
+                                `onException` throwIO (Imported paths e)
+                        _ -> throwIO (Imported paths e) )
             response <- liftIO httpLbs'
             case Text.decodeUtf8' (HTTP.responseBody response) of
-                Left  err -> liftIO (throwIO err)
+                Left  err -> liftIO (throwIO (Imported paths err))
                 Right txt -> return txt
 
     let readFile' file = liftIO (do
@@ -308,7 +310,8 @@ loadDynamic p = do
                 -- If the fallback fails, reuse the original exception to
                 -- avoid user confusion
                 let file' = file </> "@"
-                txt <- Filesystem.readTextFile file' `onException` throwIO e
+                txt <- Filesystem.readTextFile file'
+                    `onException` throwIO (Imported paths e)
                 return (Text.fromStrict txt) ) )
 
     txt <- case canonicalize (p:paths) of
@@ -347,22 +350,26 @@ loadStatic path = do
                 "localhost" -> True
                 _           -> False
         local (File _)  = True
-    if local (canonicalize (path:paths)) && not (local (canonicalize paths))
+
+    let parent = canonicalize paths
+    let here   = canonicalize (path:paths)
+
+    if local here && not (local parent)
         then liftIO (throwIO (Imported paths (ReferentiallyOpaque path)))
         else return ()
 
-    (expr, cached) <- if canonicalize (path:paths) `elem` canonicalizeAll paths
+    (expr, cached) <- if here `elem` canonicalizeAll paths
         then liftIO (throwIO (Imported paths (Cycle path)))
         else do
             m <- zoom cache State.get
-            case Map.lookup path m of
+            case Map.lookup here m of
                 Just expr -> return (expr, True)
                 Nothing   -> do
                     expr'  <- loadDynamic path
                     expr'' <- case traverse (\_ -> Nothing) expr' of
                         -- No imports left
                         Just expr -> do
-                            zoom cache (State.put $! Map.insert path expr m)
+                            zoom cache (State.put $! Map.insert here expr m)
                             return expr
                         -- Some imports left, so recurse
                         Nothing   -> do
@@ -389,7 +396,13 @@ loadStatic path = do
     return expr
 
 -- | Resolve all imports within an expression
-load :: Expr Path -> IO (Expr X)
-load expr = State.evalStateT (fmap join (traverse loadStatic expr)) status
+load
+    :: Maybe Path
+    -- ^ Starting path
+    -> Expr Path
+    -- ^ Expression to resolve
+    -> IO (Expr X)
+load here expr =
+    State.evalStateT (fmap join (traverse loadStatic expr)) status
   where
-    status = Status [] Map.empty Nothing
+    status = Status (Foldable.toList here) Map.empty Nothing
