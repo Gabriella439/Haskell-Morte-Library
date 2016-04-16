@@ -9,12 +9,14 @@ desugar to lambda abstraction.
 
 ## Quick start
 
-* Install the [Haskell Platform](http://www.haskell.org/platform/)
-* `cabal install morte`
+* Install [the `stack` tool](http://haskellstack.org/)
+* `stack setup`
+* `stack install morte`
 
-This creates the `morte` executable under `cabal`'s `bin` directory.  This
-executable reads Morte expressions from `stdin`, type-checks them, outputs their
-type to `stderr` and outputs the optimized program to `stdout`.  For example:
+This creates the `morte` executable under `stack`'s default `bin` directory
+(typically `~/.local/bin/` on Unix-like systems).  This executable reads Morte
+expressions from `stdin`, type-checks them, outputs their type to `stderr` and
+outputs the optimized program to `stdout`.  For example:
 
     $ morte
     \(a : *) -> \(x : a) -> x <Enter>
