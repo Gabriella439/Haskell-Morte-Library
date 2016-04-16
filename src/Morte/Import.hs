@@ -29,6 +29,10 @@
     >     (forall (Bool : *) -> forall (True : Bool) -> forall (False : Bool) -> True)
     >     (\(Bool : *) -> \(True : Bool) -> \(False : Bool) -> True)
 
+    ... and which normalizes to:
+
+    > λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True
+
     Imported expressions may contain imports of their own, too, which will
     continue to be resolved.  However, Morte will prevent cyclic imports.  For
     example, if you had these two files:
@@ -42,9 +46,9 @@
     ... Morte would throw the following exception if you tried to import @foo@:
 
     > morte: 
-    > ⤷ foo
-    > ⤷ bar
-    > Cyclic import: foo
+    > ⤷ ./foo
+    > ⤷ ./bar
+    > Cyclic import: ./foo
 
     You can also import expressions hosted on network endpoints.  Just use the
     URL
@@ -107,7 +111,7 @@ import qualified Filesystem.Path.CurrentOS        as Filesystem
 builderToString :: Builder -> String
 builderToString = Text.unpack . Builder.toLazyText
 
--- | An import failed because of a cycle import
+-- | An import failed because of a cycle in the import graph
 newtype Cycle = Cycle
     { cyclicImport :: Path  -- ^ The offending cyclic import
     }
@@ -395,7 +399,11 @@ loadStatic path = do
 
     return expr
 
--- | Resolve all imports within an expression
+{-| Resolve all imports within an expression
+
+    By default the starting path is the current directory, but you can override
+    the starting path with a file if you read in the expression from that file
+-}
 load
     :: Maybe Path
     -- ^ Starting path
