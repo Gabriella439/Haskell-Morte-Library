@@ -13,7 +13,7 @@
     > \(a : *) -> \(x : a) -> x
 
     > -- Bool
-    > forall (Bool : *) -> forall (True : Bool) -> forall (False : Bool) -> True
+    > forall (Bool : *) -> forall (True : Bool) -> forall (False : Bool) -> Bool
 
     > -- True
     > \(Bool : *) -> \(True : Bool) -> \(False : Bool) -> True
