@@ -233,18 +233,31 @@ canonicalize (File file0:paths0) =
     else File (clean file0)
   where
     go currPath  []               = File (clean currPath)
-    go currPath (URL  url :_    ) =
-        -- This `last` is safe because the lexer constraints all URLs to be
-        -- non-empty.  I couldn't find a simple and safe equivalent in the
-        -- `text` API
-        case Text.last prefix of
-            '/' -> URL (prefix <>        suffix)
-            _   -> URL (prefix <> "/" <> suffix)
+    go currPath (URL  url0:_    ) = combine prefix suffix
       where
-        prefix = parentURL (removeAtFromURL url)
-        suffix = Text.fromStrict (case Filesystem.toText (clean currPath) of
-            Left  txt -> txt
-            Right txt -> txt )
+        prefix = parentURL (removeAtFromURL url0)
+
+        suffix = clean currPath
+
+        -- `clean` will resolve internal @.@/@..@'s in @currPath@, but we still
+        -- need to manually handle @.@/@..@'s at the beginning of the path
+        combine url path = case Filesystem.stripPrefix ".." path of
+            Just path' -> combine url' path'
+              where
+                url' = parentURL (removeAtFromURL url)
+            Nothing    -> case Filesystem.stripPrefix "." path of
+                Just path' -> combine url path'
+                Nothing    -> 
+                    -- This `last` is safe because the lexer constraints all
+                    -- URLs to be non-empty.  I couldn't find a simple and safe
+                    -- equivalent in the `text` API
+                    case Text.last url of
+                        '/' -> URL (url <>        path')
+                        _   -> URL (url <> "/" <> path')
+              where
+                path' = Text.fromStrict (case Filesystem.toText path of
+                    Left  txt -> txt
+                    Right txt -> txt )
     go currPath (File file:paths) =
         if Filesystem.relative file
         then go          file'  paths
