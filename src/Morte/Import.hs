@@ -337,7 +337,7 @@ loadDynamic p = do
     
     let abort err = liftIO (throwIO (Imported (p:paths) err))
     case Morte.exprFromText txt of
-        Left  err  -> case p of
+        Left  err  -> case canonicalize (p:paths) of
             URL url -> do
                 -- Also try the fallback in case of a parse error, since the
                 -- parse error might signify that this URL points to a directory
