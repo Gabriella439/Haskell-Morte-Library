@@ -26,7 +26,7 @@ parser
                 (   fullDesc
                 <>  header "morte resolve - Resolve Morte code"
                 <>  progDesc "Transitively replace all remote paths and URLs \
-                             \with the code that they refer to, reading the\
+                             \with the code that they refer to, reading the \
                              \program from standard input and writing the \
                              \fully resolved program to standard output."
                 )
