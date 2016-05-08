@@ -611,7 +611,7 @@ freeIn v@(V x n) = go
 normalize :: Expr a -> Expr a
 normalize e = case e of
     Lam x _A b -> case b' of
-        App f a -> case a of
+        App f a -> case a' of
             Var v' | v == v' && not (v `freeIn` f) ->
                 shift (-1) x f  -- Eta reduce
                    | otherwise                     ->
@@ -619,6 +619,8 @@ normalize e = case e of
               where
                 v = V x 0
             _                                      -> e'
+          where
+            a' = whnf a
         _       -> e'
       where
         b' = normalize b
