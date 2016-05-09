@@ -298,21 +298,26 @@ instance Eq a => Eq (Expr a) where
         go (Lam xL tL bL) (Lam xR tR bR) = do
             ctx <- State.get
             eq1 <- go tL tR
-            State.put ((xL, xR):ctx)
-            eq2 <- go bL bR
-            State.put ctx
-            return (eq1 && eq2)
+            if eq1
+                then do
+                    State.put ((xL, xR):ctx)
+                    eq2 <- go bL bR
+                    State.put ctx
+                    return eq2
+                else return False
         go (Pi xL tL bL) (Pi xR tR bR) = do
             ctx <- State.get
             eq1 <- go tL tR
-            State.put ((xL, xR):ctx)
-            eq2 <- go bL bR
-            State.put ctx
-            return (eq1 && eq2)
+            if eq1
+                then do
+                    State.put ((xL, xR):ctx)
+                    eq2 <- go bL bR
+                    State.put ctx
+                    return eq2
+                else return False
         go (App fL aL) (App fR aR) = do
             b1 <- go fL fR
-            b2 <- go aL aR
-            return (b1 && b2)
+            if b1 then go aL aR else return False
         go (Embed pL) (Embed pR) = return (pL == pR)
         go _ _ = return False
 
