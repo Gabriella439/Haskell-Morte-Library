@@ -2,7 +2,7 @@ Name: morte
 Version: 1.6.0
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
-Tested-With: GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.2
+Tested-With: GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.2, GHC == 8.0.1
 License: BSD3
 License-File: LICENSE
 Copyright: 2014 Gabriel Gonzalez
@@ -58,7 +58,6 @@ Library
         Morte.Parser,
         Morte.Tutorial
     Build-Tools: alex
-    GHC-Options: -O2
 
 Executable morte
     Hs-Source-Dirs: exec
@@ -73,7 +72,7 @@ Benchmark bench
     Type: exitcode-stdio-1.0
     HS-Source-Dirs: bench
     Main-Is: Main.hs
-    GHC-Options: -O2 -Wall
+    GHC-Options: -Wall
     Build-Depends:
         base            >= 4        && < 5  ,
         criterion       >= 1.0.0.1  && < 1.2,
@@ -86,7 +85,7 @@ Test-Suite test
     HS-Source-Dirs: test
     Main-Is:        Main.hs
     Other-Modules:  ClosedWellTyped
-    GHC-Options:    -O2 -Wall
+    GHC-Options:    -Wall
     Build-Depends:
         base             >= 4        && < 5   ,
         mtl              >= 2.2      && < 2.3 ,

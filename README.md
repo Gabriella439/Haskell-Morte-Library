@@ -73,8 +73,6 @@ You need to put this in the ```before_install``` section so that cabal can find 
  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:/opt/happy/$HAPPYVER/bin:/opt/alex/$ALEXVER/bin:$PATH
 ```
 
-You need to remove ```- cabal check``` due to a warning about -O2 which makes the command return 1.
-
 ## License (BSD 3-clause)
 
 Copyright (c) 2014 Gabriel Gonzalez
