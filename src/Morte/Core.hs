@@ -1,8 +1,9 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveFoldable             #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -69,7 +70,10 @@ module Morte.Core (
     TypeMessage(..),
     ) where
 
+#if MIN_VERSION_base(4,8,0)
+#else
 import Control.Applicative (Applicative(..), (<$>))
+#endif
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception)
 import Control.Monad (mzero)

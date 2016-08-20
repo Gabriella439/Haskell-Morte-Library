@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -85,7 +86,10 @@ import Data.Monoid ((<>))
 import Data.Text.Buildable (build)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
+#if MIN_VERSION_base(4,8,0)
+#else
 import Data.Traversable (traverse)
+#endif
 import Data.Typeable (Typeable)
 import Filesystem.Path ((</>), FilePath)
 import Filesystem as Filesystem
@@ -248,16 +252,16 @@ canonicalize (File file0:paths0) =
             Nothing    -> case Filesystem.stripPrefix "." path of
                 Just path' -> combine url path'
                 Nothing    -> 
-                    -- This `last` is safe because the lexer constraints all
+                    -- This `last` is safe because the lexer constrains all
                     -- URLs to be non-empty.  I couldn't find a simple and safe
                     -- equivalent in the `text` API
                     case Text.last url of
                         '/' -> URL (url <>        path')
                         _   -> URL (url <> "/" <> path')
-              where
-                path' = Text.fromStrict (case Filesystem.toText path of
-                    Left  txt -> txt
-                    Right txt -> txt )
+                  where
+                    path' = Text.fromStrict (case Filesystem.toText path of
+                        Left  txt -> txt
+                        Right txt -> txt )
     go currPath (File file:paths) =
         if Filesystem.relative file
         then go          file'  paths
