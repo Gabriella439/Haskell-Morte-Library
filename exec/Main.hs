@@ -1,7 +1,7 @@
 module Main where
 
 import Control.Exception (Exception, throwIO)
-import Data.Monoid (mempty)
+import Data.Monoid
 import Data.Traversable
 import Morte.Core (typeOf, pretty, normalize)
 import Morte.Import (load)
