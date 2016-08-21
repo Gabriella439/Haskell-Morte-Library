@@ -204,7 +204,9 @@ needManager = do
         Just m  -> return m
         Nothing -> do
             let settings = HTTP.tlsManagerSettings
-                    { HTTP.managerResponseTimeout = Just 1000000 }  -- 1 second
+                    { HTTP.managerResponseTimeout =
+                        HTTP.responseTimeoutMicro 1000000
+                    }
             m <- liftIO (HTTP.newManager settings)
             zoom manager (State.put (Just m))
             return m
@@ -303,11 +305,11 @@ loadDynamic p = do
     paths <- zoom stack State.get
 
     let readURL url = do
-            request <- liftIO (HTTP.parseUrl (Text.unpack url))
+            request <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
             m       <- needManager
             let httpLbs' = do
                     HTTP.httpLbs request m `catch` (\e -> case e of
-                        HTTP.StatusCodeException _ _ _ -> do
+                        HTTP.HttpExceptionRequest _ (HTTP.StatusCodeException _ _) -> do
                             let request' = request
                                     { HTTP.path = HTTP.path request <> "/@" }
                             -- If the fallback fails, reuse the original
@@ -346,7 +348,7 @@ loadDynamic p = do
                 -- Also try the fallback in case of a parse error, since the
                 -- parse error might signify that this URL points to a directory
                 -- list
-                request  <- liftIO (HTTP.parseUrl (Text.unpack url))
+                request  <- liftIO (HTTP.parseUrlThrow (Text.unpack url))
                 let request' = request { HTTP.path = HTTP.path request <> "/@" }
                 m        <- needManager
                 response <- liftIO
@@ -364,7 +366,7 @@ loadStatic :: Path -> StateT Status IO (Expr X)
 loadStatic path = do
     paths <- zoom stack State.get
 
-    let local (URL url) = case HTTP.parseUrl (Text.unpack url) of
+    let local (URL url) = case HTTP.parseUrlThrow (Text.unpack url) of
             Nothing      -> False
             Just request -> case HTTP.host request of
                 "127.0.0.1" -> True
