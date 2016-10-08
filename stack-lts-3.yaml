@@ -1,0 +1,6 @@
+resolver: lts-3.22
+extra-deps:
+- http-client-0.5.3.2
+- http-client-tls-0.3.3
+- Earley-0.11.0.1
+- tasty-0.11.0.4

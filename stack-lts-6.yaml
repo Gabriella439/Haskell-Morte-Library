@@ -1,4 +1,4 @@
-resolver: lts-7.2
+resolver: lts-6.20
 extra-deps:
 - http-client-0.5.3.2
 - http-client-tls-0.3.3
