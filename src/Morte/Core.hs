@@ -587,7 +587,7 @@ whnf e = case e of
           where
             a' = shift 1 x a
             b' = subst x 0 a' b
-        _          -> e
+        f'         -> App f' a
     _       -> e
 
 -- | Returns whether a variable is free in an expression
