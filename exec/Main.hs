@@ -10,7 +10,8 @@ import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
-import qualified Data.Text.Lazy.IO as Text
+import qualified Data.Text.Lazy.IO  as Text
+import qualified System.IO.CodePage
 
 throws :: Exception e => Either e a -> IO a
 throws (Left  e) = throwIO e
@@ -59,7 +60,7 @@ parser
     <|> pure Default
 
 main :: IO ()
-main = do
+main = System.IO.CodePage.withCP65001 (do
     mode <- execParser $ info (helper <*> parser) 
         (   fullDesc
         <>  header "morte - A bare-bones calculus of constructions"
@@ -97,4 +98,4 @@ main = do
         Normalize -> do
             inText <- Text.getContents
             expr   <- throws (exprFromText inText)
-            Text.putStrLn (pretty (normalize expr))
+            Text.putStrLn (pretty (normalize expr)) )
