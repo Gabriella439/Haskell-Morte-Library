@@ -2,15 +2,20 @@ module Main where
 
 import Control.Exception (Exception, throwIO)
 import Data.Monoid
+import Data.Text.Buildable (Buildable)
+import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable
-import Morte.Core (typeOf, pretty, normalize)
+import Morte.Core (Expr, typeOf, normalize)
 import Morte.Import (load)
 import Morte.Parser (exprFromText)
 import Options.Applicative hiding (Const)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
-import qualified Data.Text.Lazy.IO  as Text
+import qualified Data.Text.Lazy.Builder
+import qualified Data.Text.Lazy.IO      as Text
+import qualified Morte.Core
 import qualified System.IO.CodePage
 
 throws :: Exception e => Either e a -> IO a
@@ -19,8 +24,8 @@ throws (Right r) = return r
 
 data Mode = Default | Resolve | TypeCheck | Normalize
 
-parser :: Parser Mode
-parser
+parseMode :: Parser Mode
+parseMode
     =   subparser
         (   command "resolve"
             (info (helper <*> pure Resolve)
@@ -59,9 +64,20 @@ parser
         )
     <|> pure Default
 
+parseASCII :: Parser Bool
+parseASCII =
+    flag False True
+        (   long "ascii"
+        <>  help "Pretty-print expressions using ASCII symbols instead of Unicode symbols"
+        <>  showDefault
+        )
+
+parser :: Parser (Mode, Bool)
+parser = (,) <$> parseMode <*> parseASCII
+
 main :: IO ()
 main = System.IO.CodePage.withCP65001 (do
-    mode <- execParser $ info (helper <*> parser) 
+    (mode, ascii) <- execParser $ info (helper <*> parser) 
         (   fullDesc
         <>  header "morte - A bare-bones calculus of constructions"
         <>  progDesc "Type-check, resolve, and normalize a Morte program, \
@@ -69,6 +85,16 @@ main = System.IO.CodePage.withCP65001 (do
                      \program's normalized type to standard error, and writing \
                      \the normalized program to standard output."
         )
+
+    let buildExpr :: Buildable a => Expr a -> Builder
+        buildExpr =
+            if ascii
+            then Morte.Core.buildExprASCII
+            else Morte.Core.buildExpr
+
+    let pretty :: Buildable a => Expr a -> Text
+        pretty = Data.Text.Lazy.Builder.toLazyText . buildExpr
+
     case mode of
         Default -> do
             inText   <- Text.getContents

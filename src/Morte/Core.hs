@@ -64,6 +64,8 @@ module Morte.Core (
     shift,
     subst,
     pretty,
+    buildExpr,
+    buildExprASCII,
 
     -- * Errors
     TypeError(..),
@@ -389,6 +391,7 @@ buildVExpr :: Var -> Builder
 buildVExpr (V a 0) = buildLabel a
 buildVExpr (V a b) = buildLabel a <> "@" <> buildNumber b
 
+-- | Pretty-print an expression as a `Builder`, using Unicode symbols
 buildExpr :: Buildable a => Expr a -> Builder
 buildExpr (Lam a b c) =
     "λ(" <> buildLabel a <> " : " <> buildExpr b <> ") → " <> buildExpr c
@@ -408,6 +411,27 @@ buildAExpr (Var   a) = buildVExpr a
 buildAExpr (Const a) = buildConst a
 buildAExpr (Embed a) = build a
 buildAExpr  a        = "(" <> buildExpr a <> ")"
+
+-- | Pretty-print an expression as a `Builder`, using ASCII symbols
+buildExprASCII :: Buildable a => Expr a -> Builder
+buildExprASCII (Lam a b c) =
+    "\\(" <> buildLabel a <> " : " <> buildExprASCII b <> ") -> " <> buildExprASCII c
+buildExprASCII (Pi "_" b c) =
+    buildBExprASCII b <> " -> " <> buildExprASCII c
+buildExprASCII (Pi a b c) =
+    "forall (" <> buildLabel a <> " : " <> buildExprASCII b <> ") -> " <> buildExprASCII c
+buildExprASCII e =
+    buildBExprASCII e
+
+buildBExprASCII :: Buildable a => Expr a -> Builder
+buildBExprASCII (App a b) = buildBExprASCII a <> " " <> buildAExprASCII b
+buildBExprASCII  a        = buildAExprASCII a
+
+buildAExprASCII :: Buildable a => Expr a -> Builder
+buildAExprASCII (Var   a) = buildVExpr a
+buildAExprASCII (Const a) = buildConst a
+buildAExprASCII (Embed a) = build a
+buildAExprASCII  a        = "(" <> buildExprASCII a <> ")"
 
 -- | Generates a syntactically valid Morte program
 instance Buildable a => Buildable (Expr a)
