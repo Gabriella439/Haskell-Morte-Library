@@ -83,6 +83,7 @@ import Data.Monoid ((<>))
 import Data.String (IsString(..))
 import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
@@ -375,36 +376,43 @@ instance NFData a => NFData (Expr a) where
         App f a     -> rnf f `seq` rnf a
         Embed p     -> rnf p
 
+buildLabel :: Text -> Builder
+buildLabel = build
+
+buildNumber :: Int -> Builder
+buildNumber = build
+
+buildConst :: Const -> Builder
+buildConst = build
+
+buildVExpr :: Var -> Builder
+buildVExpr (V a 0) = buildLabel a
+buildVExpr (V a b) = buildLabel a <> "@" <> buildNumber b
+
+buildExpr :: Buildable a => Expr a -> Builder
+buildExpr (Lam a b c) =
+    "λ(" <> buildLabel a <> " : " <> buildExpr b <> ") → " <> buildExpr c
+buildExpr (Pi "_" b c) =
+    buildBExpr b <> " → " <> buildExpr c
+buildExpr (Pi a b c) =
+    "∀(" <> buildLabel a <> " : " <> buildExpr b <> ") → " <> buildExpr c
+buildExpr e =
+    buildBExpr e
+
+buildBExpr :: Buildable a => Expr a -> Builder
+buildBExpr (App a b) = buildBExpr a <> " " <> buildAExpr b
+buildBExpr  a        = buildAExpr a
+
+buildAExpr :: Buildable a => Expr a -> Builder
+buildAExpr (Var   a) = buildVExpr a
+buildAExpr (Const a) = buildConst a
+buildAExpr (Embed a) = build a
+buildAExpr  a        = "(" <> buildExpr a <> ")"
+
 -- | Generates a syntactically valid Morte program
 instance Buildable a => Buildable (Expr a)
   where
-    build = go False False
-      where
-        go parenBind parenApp e = case e of
-            Const c    -> build c
-            Var x      -> build x
-            Lam x _A b ->
-                    (if parenBind then "(" else "")
-                <>  "λ("
-                <>  build x
-                <>  " : "
-                <>  go False False _A
-                <>  ") → "
-                <>  go False False b
-                <>  (if parenBind then ")" else "")
-            Pi  x _A b ->
-                    (if parenBind then "(" else "")
-                <>  (if x /= "_"
-                     then "∀(" <> build x <> " : " <> go False False _A <> ")"
-                     else go True False _A )
-                <>  " → "
-                <>  go False False b
-                <>  (if parenBind then ")" else "")
-            App f a    ->
-                    (if parenApp then "(" else "")
-                <>  go True False f <> " " <> go True True a
-                <>  (if parenApp then ")" else "")
-            Embed p    -> build p
+    build = buildExpr
 
 -- | The specific type error
 data TypeMessage
