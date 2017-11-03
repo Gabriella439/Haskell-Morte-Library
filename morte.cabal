@@ -1,5 +1,5 @@
 Name: morte
-Version: 1.6.10
+Version: 1.6.11
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.2, GHC == 8.0.1
