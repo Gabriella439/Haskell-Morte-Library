@@ -571,6 +571,7 @@ typeWith ctx e = case e of
         Nothing -> Left (TypeError ctx e UnboundVariable)
         Just a  -> return a
     Lam x _A b  -> do
+        _ <- typeWith ctx _A
         let ctx' = fmap (shift 1 x) (Context.insert x _A ctx)
         _B <- typeWith ctx' b
         let p = Pi x _A _B
