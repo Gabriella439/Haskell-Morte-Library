@@ -6,7 +6,7 @@
 }:
 mkDerivation {
   pname = "morte";
-  version = "1.6.15";
+  version = "1.6.16";
   src = ./.;
   isLibrary = true;
   isExecutable = true;
