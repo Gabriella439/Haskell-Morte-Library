@@ -3,11 +3,11 @@
 , http-client-tls, microlens, microlens-mtl, mtl
 , optparse-applicative, pipes, QuickCheck, stdenv, system-fileio
 , system-filepath, tasty, tasty-hunit, tasty-quickcheck, text
-, text-format, transformers
+, transformers
 }:
 mkDerivation {
   pname = "morte";
-  version = "1.6.16";
+  version = "1.6.17";
   src = ./.;
   isLibrary = true;
   isExecutable = true;
@@ -19,7 +19,7 @@ mkDerivation {
   ];
   libraryToolDepends = [ alex ];
   executableHaskellDepends = [
-    base code-page optparse-applicative text text-format
+    base code-page formatting optparse-applicative text
   ];
   testHaskellDepends = [
     base mtl QuickCheck system-filepath tasty tasty-hunit
