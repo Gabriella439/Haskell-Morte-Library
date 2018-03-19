@@ -1,8 +1,9 @@
 { mkDerivation, alex, array, base, binary, code-page, containers
-, criterion, deepseq, Earley, http-client, http-client-tls
-, microlens, microlens-mtl, mtl, optparse-applicative, pipes
-, QuickCheck, stdenv, system-fileio, system-filepath, tasty
-, tasty-hunit, tasty-quickcheck, text, text-format, transformers
+, criterion, deepseq, Earley, formatting, http-client
+, http-client-tls, microlens, microlens-mtl, mtl
+, optparse-applicative, pipes, QuickCheck, stdenv, system-fileio
+, system-filepath, tasty, tasty-hunit, tasty-quickcheck, text
+, text-format, transformers
 }:
 mkDerivation {
   pname = "morte";
@@ -12,9 +13,9 @@ mkDerivation {
   isExecutable = true;
   enableSeparateDataOutput = true;
   libraryHaskellDepends = [
-    array base binary containers deepseq Earley http-client
+    array base binary containers deepseq Earley formatting http-client
     http-client-tls microlens microlens-mtl pipes system-fileio
-    system-filepath text text-format transformers
+    system-filepath text transformers
   ];
   libraryToolDepends = [ alex ];
   executableHaskellDepends = [

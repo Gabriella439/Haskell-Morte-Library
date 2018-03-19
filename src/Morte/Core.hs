@@ -83,13 +83,13 @@ import Data.Binary (Binary(..), Get, Put)
 import Data.Foldable
 import Data.Monoid ((<>))
 import Data.String (IsString(..))
-import Data.Text.Buildable (Buildable(..))
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
+import Formatting.Buildable (Buildable(..))
 import Morte.Context (Context)
 import Prelude hiding (FilePath)
 

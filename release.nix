@@ -14,6 +14,8 @@ let
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
           morte = haskellPackagesNew.callPackage ./default.nix { };
+
+          formatting = haskellPackagesNew.callPackage ./formatting.nix { };
         };
       };
     };
