@@ -2,10 +2,10 @@ module Main where
 
 import Control.Exception (Exception, throwIO)
 import Data.Monoid
-import Data.Text.Buildable (Buildable)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable
+import Formatting.Buildable (Buildable)
 import Morte.Core (Expr, typeOf, normalize)
 import Morte.Import (load)
 import Morte.Parser (exprFromText)
