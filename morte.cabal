@@ -93,7 +93,7 @@ Test-Suite test
         mtl              >= 2.2      && < 2.3 ,
         QuickCheck       >= 2.8.1    && < 2.12,
         system-filepath  >= 0.3.1    && < 0.5 ,
-        tasty            >= 0.11     && < 1.1 ,
+        tasty            >= 0.11     && < 1.2 ,
         tasty-hunit      >= 0.9      && < 0.11,
         tasty-quickcheck >= 0.8.4    && < 0.11,
         transformers     >= 0.2.0.0  && < 0.6 ,
