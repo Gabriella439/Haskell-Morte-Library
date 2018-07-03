@@ -1,1 +1,1 @@
-(import ./release.nix).morte.env
+(import ./default.nix).shell

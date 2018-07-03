@@ -1,31 +1,29 @@
-{ mkDerivation, alex, array, base, binary, code-page, containers
-, criterion, deepseq, Earley, formatting, http-client
-, http-client-tls, microlens, microlens-mtl, mtl
-, optparse-applicative, pipes, QuickCheck, stdenv, system-fileio
-, system-filepath, tasty, tasty-hunit, tasty-quickcheck, text
-, transformers
-}:
-mkDerivation {
-  pname = "morte";
-  version = "1.6.19";
-  src = ./.;
-  isLibrary = true;
-  isExecutable = true;
-  enableSeparateDataOutput = true;
-  libraryHaskellDepends = [
-    array base binary containers deepseq Earley formatting http-client
-    http-client-tls microlens microlens-mtl pipes system-fileio
-    system-filepath text transformers
-  ];
-  libraryToolDepends = [ alex ];
-  executableHaskellDepends = [
-    base code-page formatting optparse-applicative text
-  ];
-  testHaskellDepends = [
-    base mtl QuickCheck system-filepath tasty tasty-hunit
-    tasty-quickcheck text transformers
-  ];
-  benchmarkHaskellDepends = [ base criterion system-filepath text ];
-  description = "A bare-bones calculus of constructions";
-  license = stdenv.lib.licenses.bsd3;
-}
+let
+  fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
+
+  nixpkgs = fetchNixpkgs {
+    rev = "804060ff9a79ceb0925fe9ef79ddbf564a225d47";
+
+    sha256 = "01pb6p07xawi60kshsxxq1bzn8a0y4s5jjqvhkwps4f5xjmmwav3";
+
+    outputSha256 = "0ga345hgw6v2kzyhvf5kw96hf60mx5pbd9c4qj5q4nan4lr7nkxn";
+  };
+
+  readDirectory = import ./nix/readDirectory.nix;
+
+  config = {
+    packageOverrides = pkgs: {
+      haskellPackages = pkgs.haskellPackages.override {
+        overrides = readDirectory ./nix;
+      };
+    };
+  };
+
+  pkgs =
+    import nixpkgs { inherit config; };
+
+in
+  { inherit (pkgs.haskellPackages) morte;
+
+    shell = (pkgs.haskell.lib.doBenchmark pkgs.haskellPackages.morte).env;
+  }
