@@ -2,4 +2,4 @@ let
   default = import ./default.nix;
 
 in
-  { inherit (default) dhall; }
+  { inherit (default) morte; }
