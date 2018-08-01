@@ -7,6 +7,7 @@ module ClosedWellTyped (
 import Control.Applicative hiding (Const)
 import Control.Monad (guard)
 import Data.Text.Lazy (Text)
+import Data.Void (Void)
 import Control.Monad.State.Lazy (MonadState, StateT)
 import Control.Monad.Trans.Class (lift)
 import Morte.Core
@@ -17,11 +18,11 @@ import qualified Control.Monad.State.Lazy as State
 import qualified Data.Text.Lazy           as Text
 import qualified Test.QuickCheck          as QuickCheck
 
-newtype ClosedWellTyped = ClosedWellTyped { unClosedWellTyped :: Expr X }
+newtype ClosedWellTyped = ClosedWellTyped { unClosedWellTyped :: Expr Void }
     deriving Show
 
 data Env = Env
-    { bindings :: [(Var, Expr X)]
+    { bindings :: [(Var, Expr Void)]
     , uniques  :: [Text]
     }
 
@@ -47,10 +48,10 @@ initEnv n = Env
     , uniques  = map (Text.pack . show) [1..n]
     }
 
-extend :: Var -> Expr X -> M ()
+extend :: Var -> Expr Void -> M ()
 extend x t = State.modify (\env -> env { bindings = (x, t) : bindings env })
 
-select :: [(Int, M (Expr X, Expr X), Env -> Bool)] -> M (Expr X, Expr X)
+select :: [(Int, M (Expr Void, Expr Void), Env -> Bool)] -> M (Expr Void, Expr Void)
 select wgps = do
     env <- State.get
     m   <- liftGen (QuickCheck.frequency (do
@@ -70,11 +71,11 @@ matching t = any ((t ==) . snd)
 moreThan :: Int -> [a] -> Bool
 moreThan n = not . null . drop n
 
-piFilter :: Expr X -> Expr X -> Bool
+piFilter :: Expr Void -> Expr Void -> Bool
 piFilter t (Pi _ _A _) = _A == t
 piFilter _  _          = False
 
-closed :: M (Expr X, Expr X)
+closed :: M (Expr Void, Expr Void)
 closed =
     select
         [ (20, typeOrKind                       , \_ -> True          )
@@ -82,7 +83,7 @@ closed =
         , (30, app                              , moreThan 1 . uniques)
         ]
 
-termOrType :: M (Expr X, Expr X)
+termOrType :: M (Expr Void, Expr Void)
 termOrType =
     select
         [ ( 5, type_                            , moreThan 0 . uniques )
@@ -93,7 +94,7 @@ termOrType =
                 ||  (moreThan 0 (bindings e) && moreThan 0 (uniques e)) )
         ]
 
-typeOrKind :: M (Expr X, Expr X)
+typeOrKind :: M (Expr Void, Expr Void)
 typeOrKind =
     select
         [ (15, return (Const Star,Const Box)   , \_ -> True                      )
@@ -101,7 +102,7 @@ typeOrKind =
         , (15, pi (scope typeOrKind) typeOrKind, moreThan 0            . uniques )
         ]
 
-varWith :: (Expr X -> Bool) -> M (Expr X, Expr X)
+varWith :: (Expr Void -> Bool) -> M (Expr Void, Expr Void)
 varWith f = do
     bEnv <- State.gets bindings
     liftGen (QuickCheck.elements (do
@@ -109,10 +110,10 @@ varWith f = do
         guard (f y)
         return (Var x, y) ))
 
-var :: M (Expr X, Expr X)
+var :: M (Expr Void, Expr Void)
 var = varWith (\_ -> True)
 
-type_ :: M (Expr X, Expr X)
+type_ :: M (Expr Void, Expr Void)
 type_ =
     select
         [ (20, varWith (== Const Star)     , matching (Const Star) . bindings)
@@ -126,9 +127,9 @@ fresh = do
     State.put (env { uniques = xs })
     return x
 
-lam :: M (Expr X, Expr X)
-    -> M (Expr X, Expr X)
-    -> M (Expr X, Expr X)
+lam :: M (Expr Void, Expr Void)
+    -> M (Expr Void, Expr Void)
+    -> M (Expr Void, Expr Void)
 lam _AGen bGen = do
     x <- fresh
     (_A, _) <- _AGen
@@ -136,9 +137,9 @@ lam _AGen bGen = do
     (b, bType) <- bGen
     return (Lam x _A b, Pi x _A bType)
 
-pi  :: M (Expr X, Expr X)
-    -> M (Expr X, Expr X)
-    -> M (Expr X, Expr X)
+pi  :: M (Expr Void, Expr Void)
+    -> M (Expr Void, Expr Void)
+    -> M (Expr Void, Expr Void)
 pi _AGen _BGen = do
     x <- fresh
     (_A, _) <- _AGen
@@ -146,7 +147,7 @@ pi _AGen _BGen = do
     (_B, _BType) <- _BGen
     return (Pi x _A _B, _BType)
 
-app :: M (Expr X, Expr X)
+app :: M (Expr Void, Expr Void)
 app = do
     (_N, _A       ) <- scope termOrType
     let genA = return (_A, Const Star)
