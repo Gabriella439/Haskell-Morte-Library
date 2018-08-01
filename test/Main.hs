@@ -7,8 +7,9 @@ module Main (
 import Control.Exception (throwIO)
 import ClosedWellTyped (ClosedWellTyped(..))
 import Data.Text.Lazy (Text)
+import Data.Void (Void)
 import Filesystem.Path (FilePath)
-import Morte.Core (Expr, X)
+import Morte.Core (Expr)
 import Paths_morte (getDataFileName)
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
@@ -54,7 +55,7 @@ tests =
             ]
         ]
 
-typeChecks :: Expr X -> Bool
+typeChecks :: Expr Void -> Bool
 typeChecks expr = case Morte.typeOf expr of
     Right _ -> True
     Left  _ -> False

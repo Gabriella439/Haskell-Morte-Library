@@ -51,7 +51,6 @@ module Morte.Core (
     Var(..),
     Const(..),
     Path(..),
-    X(..),
     Expr(..),
     Context,
 
@@ -78,7 +77,6 @@ import Control.Applicative (Applicative(..), (<$>))
 #endif
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception)
-import Control.Monad (mzero)
 import Data.Binary (Binary(..), Get, Put)
 import Data.Foldable
 import Data.Monoid ((<>))
@@ -87,6 +85,7 @@ import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder (Builder)
 import Data.Traversable
 import Data.Typeable (Typeable)
+import Data.Void (Void, absurd)
 import Data.Word (Word8)
 import Filesystem.Path.CurrentOS (FilePath)
 import Formatting.Buildable (Buildable(..))
@@ -224,27 +223,6 @@ instance Buildable Path where
       where
         txt = Text.fromStrict (either id id (Filesystem.toText file))
     build (URL  str ) = build str <> " "
-
-{-| Like `Data.Void.Void`, except with an `NFData` instance in order to avoid
-    orphan instances
--}
-newtype X = X { absurd :: forall a . a }
-
-instance Eq X where
-    _ == _ = True
-
-instance Show X where
-    show = absurd
-
-instance NFData X where
-    rnf x = seq x ()
-
-instance Buildable X where
-    build = absurd
-
-instance Binary X where
-    get = mzero
-    put = absurd
 
 -- | Syntax tree for expressions
 data Expr a
@@ -441,10 +419,10 @@ instance Buildable a => Buildable (Expr a)
 -- | The specific type error
 data TypeMessage
     = UnboundVariable
-    | InvalidInputType (Expr X)
-    | InvalidOutputType (Expr X)
+    | InvalidInputType (Expr Void)
+    | InvalidOutputType (Expr Void)
     | NotAFunction
-    | TypeMismatch (Expr X) (Expr X)
+    | TypeMismatch (Expr Void) (Expr Void)
     | Untyped Const
     deriving (Show)
 
@@ -481,8 +459,8 @@ instance Buildable TypeMessage where
 
 -- | A structured type error that includes context
 data TypeError = TypeError
-    { context     :: Context (Expr X)
-    , current     :: Expr X
+    { context     :: Context (Expr Void)
+    , current     :: Expr Void
     , typeMessage :: TypeMessage
     } deriving (Typeable)
 
@@ -564,7 +542,7 @@ shift d x0 e0 = go e0 0
     is not necessary for just type-checking.  If you actually care about the
     returned type then you may want to `normalize` it afterwards.
 -}
-typeWith :: Context (Expr X) -> Expr X -> Either TypeError (Expr X)
+typeWith :: Context (Expr Void) -> Expr Void -> Either TypeError (Expr Void)
 typeWith ctx e = case e of
     Const c     -> fmap Const (axiom c)
     Var (V x n) -> case Context.lookup x n ctx of
@@ -609,7 +587,7 @@ typeWith ctx e = case e of
     expression must be closed (i.e. no free variables), otherwise type-checking
     will fail.
 -}
-typeOf :: Expr X -> Either TypeError (Expr X)
+typeOf :: Expr Void -> Either TypeError (Expr Void)
 typeOf = typeWith Context.empty
 
 -- | Reduce an expression to weak-head normal form
