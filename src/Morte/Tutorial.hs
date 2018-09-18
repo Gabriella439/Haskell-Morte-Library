@@ -2065,7 +2065,7 @@ input to standard output:
     @Zero))@.  This causes a parsing failure because @morte@ can no longer find
     the program's closing parentheses.
 
-    When you use imports, each hashtag is replaced with the expression from that
+    When you use imports, each file name is replaced with the expression from that
     file, so it would be as if you wrote the following really long expression:
 
 > $ morte
