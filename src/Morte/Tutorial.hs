@@ -2045,7 +2045,7 @@ input to standard output:
 >
 > λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ Zero))
 
-    Take care that you must have whitespace after the hashtag import.  If you
+    Take care that you must have whitespace after the file name import.  If you
     were to write:
 
 > $ morte
