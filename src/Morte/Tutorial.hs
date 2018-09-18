@@ -2124,9 +2124,8 @@ input to standard output:
     design feature of Boehm-Berarducci encoding known as \"representability\".
 
     The <https://github.com/Gabriel439/Haskell-Morte-Library Morte repository>
-    provides a simple Prelude of utilities that you can try out.  For example,
-    if you @cd@ to the @local@ directory of the repository, you can run
-    expressions like:
+    provides a simple Prelude of utilities that you can try out.  If you @cd@
+    to the @Prelude@ directory of the repository, you can run expressions like:
 
 > $ morte
 > ./id ./Bool ./Bool/True
@@ -2224,12 +2223,6 @@ input to standard output:
 > 
 > λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True
  
-    In fact, the @remote@ directory in the @morte@ repository does exactly this,
-    mirroring the structure of the @local@ directory except all the files are
-    just references to network-hosted expressions.  If you @cd@ to the @remote@
-    directory all of the above examples will still work, except this time when
-    you compile the examples they will download the expressions from the server.
-
     Remote expressions can reference other remote expressions, and the compiler
     will track down and resolve all of these references, taking care to avoid
     cycles.  This means that you can host code on the network that references
