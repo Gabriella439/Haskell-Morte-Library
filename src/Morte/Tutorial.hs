@@ -1057,7 +1057,7 @@ import Morte.Import (ReferentiallyOpaque)
     Morte using the rules for existential quantification given in the previous
     section:
 
-> (forall (x : *) -> (forall (s : *) -> s -> (s -> StreamF a s) -> x) -> x
+> forall (x : *) -> (forall (s : *) -> s -> (s -> StreamF a s) -> x) -> x
 
     See the next section for some example @Stream@ code.
 -}
@@ -1604,7 +1604,7 @@ import Morte.Import (ReferentiallyOpaque)
 > --     ninetynine = nine * ten + nine
 > --
 > --     main_ :: IO U
-> --     main_ = getLine >>= putStrLn
+> --     main_ = replicateM_ ninetynine (getLine >>= putStrLn)
 > 
 > -- "Free" variables
 > (   \(String : *   )
