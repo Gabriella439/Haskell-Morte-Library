@@ -1057,7 +1057,7 @@ import Morte.Import (ReferentiallyOpaque)
     Morte using the rules for existential quantification given in the previous
     section:
 
-> (forall (x : *) -> (forall (s : *) -> s -> (s -> StreamF a s) -> x) -> x
+> forall (x : *) -> (forall (s : *) -> s -> (s -> StreamF a s) -> x) -> x
 
     See the next section for some example @Stream@ code.
 -}
@@ -1604,7 +1604,7 @@ import Morte.Import (ReferentiallyOpaque)
 > --     ninetynine = nine * ten + nine
 > --
 > --     main_ :: IO U
-> --     main_ = getLine >>= putStrLn
+> --     main_ = replicateM_ ninetynine (getLine >>= putStrLn)
 > 
 > -- "Free" variables
 > (   \(String : *   )
@@ -2045,7 +2045,7 @@ input to standard output:
 >
 > λ(Nat : *) → λ(Succ : Nat → Nat) → λ(Zero : Nat) → Succ (Succ (Succ Zero))
 
-    Take care that you must have whitespace after the hashtag import.  If you
+    Take care that you must have whitespace after the file name import.  If you
     were to write:
 
 > $ morte
@@ -2065,7 +2065,7 @@ input to standard output:
     @Zero))@.  This causes a parsing failure because @morte@ can no longer find
     the program's closing parentheses.
 
-    When you use imports, each hashtag is replaced with the expression from that
+    When you use imports, each file name is replaced with the expression from that
     file, so it would be as if you wrote the following really long expression:
 
 > $ morte
@@ -2124,9 +2124,8 @@ input to standard output:
     design feature of Boehm-Berarducci encoding known as \"representability\".
 
     The <https://github.com/Gabriel439/Haskell-Morte-Library Morte repository>
-    provides a simple Prelude of utilities that you can try out.  For example,
-    if you @cd@ to the @local@ directory of the repository, you can run
-    expressions like:
+    provides a simple Prelude of utilities that you can try out.  If you @cd@
+    to the @Prelude@ directory of the repository, you can run expressions like:
 
 > $ morte
 > ./id ./Bool ./Bool/True
@@ -2224,12 +2223,6 @@ input to standard output:
 > 
 > λ(Bool : *) → λ(True : Bool) → λ(False : Bool) → True
  
-    In fact, the @remote@ directory in the @morte@ repository does exactly this,
-    mirroring the structure of the @local@ directory except all the files are
-    just references to network-hosted expressions.  If you @cd@ to the @remote@
-    directory all of the above examples will still work, except this time when
-    you compile the examples they will download the expressions from the server.
-
     Remote expressions can reference other remote expressions, and the compiler
     will track down and resolve all of these references, taking care to avoid
     cycles.  This means that you can host code on the network that references
