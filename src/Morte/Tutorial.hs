@@ -451,7 +451,7 @@ import Morte.Import (ReferentiallyOpaque)
 > r      : *  -- The result type of all three case branches
 > t      : T String Int Bool
 >
-> matchT String Int Bool r t
+> matchT String Int Bool t r
 >     (                                ...)  -- Branch if you match `A`
 >     (\(s : String) ->                ...)  -- Branch if you match `B`
 >     (\(i : Int   ) -> \(b : Bool) -> ...)  -- Branch if you match `C`
