@@ -151,7 +151,7 @@ app :: M (Expr Void, Expr Void)
 app = do
     (_N, _A       ) <- scope termOrType
     let genA = return (_A, Const Star)
-    (f , Pi x _ _B) <- do
+    ~(f , Pi x _ _B) <- do
         scope
             (select
                 [ (40, lam genA termOrType  , moreThan 0              . uniques )
