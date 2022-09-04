@@ -4,10 +4,10 @@ Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 License: BSD3
 License-File: LICENSE
-Copyright: 2016 Gabriel Gonzalez
-Author: Gabriel Gonzalez
-Maintainer: Gabriel439@gmail.com
-Bug-Reports: https://github.com/Gabriel439/Haskell-Morte-Library/issues
+Copyright: 2016 Gabriella Gonzalez
+Author: Gabriella Gonzalez
+Maintainer: GenuineGabriella@gmail.com
+Bug-Reports: https://github.com/Gabriella439/Haskell-Morte-Library/issues
 Synopsis: A bare-bones calculus of constructions
 Description: Morte is a typed, purely functional, and strongly normalizing
     intermediate language designed for whole-program super-optimization.  Use
@@ -28,7 +28,7 @@ Category: Compiler
 Data-Files: bench/src/*.mt test/src/*.mt
 Source-Repository head
     Type: git
-    Location: https://github.com/Gabriel439/Haskell-Morte-Library
+    Location: https://github.com/Gabriella439/Haskell-Morte-Library
 
 Library
     Hs-Source-Dirs: src
