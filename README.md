@@ -31,7 +31,7 @@ To learn more, read the
 
 You can also use a front-end. Current front ends are
 
-- [Annah](https://github.com/Gabriel439/Haskell-Annah-Library)
+- [Annah](https://github.com/Gabriella439/Haskell-Annah-Library)
 
 with hopefully more to come.
 
@@ -45,7 +45,7 @@ this.
 
 ## Development Status
 
-[![Build Status](https://travis-ci.org/Gabriel439/Haskell-Morte-Library.png)](https://travis-ci.org/Gabriel439/Haskell-Morte-Library)
+[![Build Status](https://travis-ci.org/Gabriella439/Haskell-Morte-Library.png)](https://travis-ci.org/Gabriella439/Haskell-Morte-Library)
 
 The main volatility in the API is in error reporting, specifically how to
 preserve better error messages for front-end compilers.
@@ -81,7 +81,7 @@ You need to put this in the ```before_install``` section so that cabal can find 
 
 ## License (BSD 3-clause)
 
-Copyright (c) 2014 Gabriel Gonzalez
+Copyright (c) 2014 Gabriella Gonzalez
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -94,7 +94,7 @@ are permitted provided that the following conditions are met:
   list of conditions and the following disclaimer in the documentation and/or
   other materials provided with the distribution.
 
-* Neither the name of Gabriel Gonzalez nor the names of other contributors may
+* Neither the name of Gabriella Gonzalez nor the names of other contributors may
   be used to endorse or promote products derived from this software without
   specific prior written permission.
 
